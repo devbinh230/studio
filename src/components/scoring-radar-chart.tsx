@@ -9,20 +9,28 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { ChartContainer } from '@/components/ui/chart';
-import { SummaryDetails } from '@/lib/types';
+import type { SummaryDetails } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { Skeleton } from './ui/skeleton';
 
 type ScoringRadarChartProps = {
   details: SummaryDetails;
-}
+};
 
-export function ScoringRadarChart({details}: ScoringRadarChartProps) {
-    const chartData = [
-        { criterion: 'Location', score: details.location.score },
-        { criterion: 'Utilities', score: details.utilities.score },
-        { criterion: 'Planning', score: details.planning.score },
-        { criterion: 'Legal', score: details.legal.score },
-        { criterion: 'Quality', score: details.quality.score },
-    ];
+export function ScoringRadarChart({ details }: ScoringRadarChartProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const chartData = [
+    { criterion: 'Location', score: details.location.score },
+    { criterion: 'Utilities', score: details.utilities.score },
+    { criterion: 'Planning', score: details.planning.score },
+    { criterion: 'Legal', score: details.legal.score },
+    { criterion: 'Quality', score: details.quality.score },
+  ];
 
   return (
     <Card>
@@ -33,37 +41,45 @@ export function ScoringRadarChart({details}: ScoringRadarChartProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="pb-0">
-        <ChartContainer
-          config={{
-            score: {
-              label: 'Score',
-              color: 'hsl(var(--accent))',
-            },
-          }}
-          className="mx-auto aspect-square h-64"
-        >
-          <RadarChart data={chartData}
-            margin={{
-              top: 10,
-              right: 10,
-              bottom: 10,
-              left: 10,
-            }}>
-            <PolarGrid gridType='polygon' />
-            <PolarAngleAxis dataKey="criterion" />
-            <Radar
-              dataKey="score"
-              fill="hsl(var(--accent))"
-              fillOpacity={0.6}
-              stroke="hsl(var(--accent))"
-              strokeWidth={2}
-              dot={{
-                r: 4,
-                fillOpacity: 1,
+        {isMounted ? (
+          <ChartContainer
+            config={{
+              score: {
+                label: 'Score',
+                color: 'hsl(var(--accent))',
+              },
+            }}
+            className="mx-auto aspect-square h-64"
+          >
+            <RadarChart
+              data={chartData}
+              margin={{
+                top: 10,
+                right: 10,
+                bottom: 10,
+                left: 10,
               }}
-            />
-          </RadarChart>
-        </ChartContainer>
+            >
+              <PolarGrid gridType="polygon" />
+              <PolarAngleAxis dataKey="criterion" />
+              <Radar
+                dataKey="score"
+                fill="hsl(var(--accent))"
+                fillOpacity={0.6}
+                stroke="hsl(var(--accent))"
+                strokeWidth={2}
+                dot={{
+                  r: 4,
+                  fillOpacity: 1,
+                }}
+              />
+            </RadarChart>
+          </ChartContainer>
+        ) : (
+          <div className="mx-auto aspect-square h-64 flex items-center justify-center pb-6">
+            <Skeleton className="h-full w-full rounded-full" />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
