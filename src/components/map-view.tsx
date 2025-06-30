@@ -19,7 +19,7 @@ export function MapView() {
       <CardContent>
         <div className="aspect-video w-full overflow-hidden rounded-lg">
           <Image
-            src="https://placehold.co/800x600.png"
+            src="https://maps.geoapify.com/v1/staticmap?style=osm-bright-grey&width=600&height=400&center=lonlat:105.792854,21.002909&zoom=15.3276&scaleFactor=2&apiKey=b8568cb9afc64fad861a69edbddb2658"
             alt="Bản đồ vị trí bất động sản"
             width={800}
             height={600}
