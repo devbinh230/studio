@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'file4.batdongsan.com.vn',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
