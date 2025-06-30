@@ -1,6 +1,6 @@
 'use client';
 
-import { PolarGrid, PolarAngleAxis, Radar, RadarChart } from 'recharts';
+import { PolarGrid, PolarAngleAxis, Radar, RadarChart, PolarRadiusAxis } from 'recharts';
 import {
   Card,
   CardContent,
@@ -25,19 +25,19 @@ export function ScoringRadarChart({ details }: ScoringRadarChartProps) {
   }, []);
 
   const chartData = [
-    { criterion: 'Location', score: details.location.score },
-    { criterion: 'Utilities', score: details.utilities.score },
-    { criterion: 'Planning', score: details.planning.score },
-    { criterion: 'Legal', score: details.legal.score },
-    { criterion: 'Quality', score: details.quality.score },
+    { criterion: 'Vị trí', score: details.location.score },
+    { criterion: 'Tiện ích', score: details.utilities.score },
+    { criterion: 'Quy hoạch', score: details.planning.score },
+    { criterion: 'Pháp lý', score: details.legal.score },
+    { criterion: 'Chất lượng', score: details.quality.score },
   ];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">Multi-criteria Scoring</CardTitle>
+        <CardTitle className="font-headline">Chấm điểm Đa tiêu chí</CardTitle>
         <CardDescription>
-          An intuitive view of the property's strengths and weaknesses.
+          Góc nhìn trực quan về điểm mạnh và yếu của bất động sản.
         </CardDescription>
       </CardHeader>
       <CardContent className="pb-0">
@@ -45,7 +45,7 @@ export function ScoringRadarChart({ details }: ScoringRadarChartProps) {
           <ChartContainer
             config={{
               score: {
-                label: 'Score',
+                label: 'Điểm',
                 color: 'hsl(var(--accent))',
               },
             }}
@@ -62,6 +62,7 @@ export function ScoringRadarChart({ details }: ScoringRadarChartProps) {
             >
               <PolarGrid gridType="polygon" />
               <PolarAngleAxis dataKey="criterion" />
+              <PolarRadiusAxis angle={90} domain={[0, 10]} axisLine={false} tick={false}/>
               <Radar
                 dataKey="score"
                 fill="hsl(var(--accent))"

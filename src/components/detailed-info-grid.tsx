@@ -18,27 +18,27 @@ type DetailedInfoGridProps = {
 const criteriaConfig = [
   {
     key: 'location',
-    title: 'Location',
+    title: 'Vị trí',
     icon: MapPin,
   },
   {
     key: 'utilities',
-    title: 'Utilities',
+    title: 'Tiện ích',
     icon: ShoppingCart,
   },
   {
     key: 'planning',
-    title: 'Planning',
+    title: 'Quy hoạch',
     icon: ScrollText,
   },
   {
     key: 'legal',
-    title: 'Legal',
+    title: 'Pháp lý',
     icon: ShieldCheck,
   },
   {
     key: 'quality',
-    title: 'Quality',
+    title: 'Chất lượng',
     icon: Construction,
   },
 ] as const;
@@ -47,7 +47,7 @@ export function DetailedInfoGrid({ summary, details }: DetailedInfoGridProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">AI-Generated Summary</CardTitle>
+        <CardTitle className="font-headline">Tổng hợp từ AI</CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-muted-foreground mb-6">{summary.summary}</p>
@@ -60,7 +60,7 @@ export function DetailedInfoGrid({ summary, details }: DetailedInfoGridProps) {
                   <item.icon className="h-6 w-6" />
                 </div>
                 <div>
-                  <h4 className="font-semibold">{item.title} (Score: {detailItem.score}/10)</h4>
+                  <h4 className="font-semibold">{item.title} (Điểm: {detailItem.score}/10)</h4>
                   <p className="text-sm text-muted-foreground">
                     {detailItem.details}
                   </p>

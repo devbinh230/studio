@@ -6,11 +6,11 @@ import { propertySummary } from '@/ai/flows/property-summary';
 import type { CombinedResult, PropertyInputSchema } from '@/lib/types';
 
 const propertyInputSchema = z.object({
-  address: z.string().min(5, 'Please enter a valid address.'),
-  size: z.coerce.number().min(100, 'Size must be at least 100 sq ft.'),
-  bedrooms: z.coerce.number().min(1, 'Must have at least 1 bedroom.'),
-  bathrooms: z.coerce.number().min(1, 'Must have at least 1 bathroom.'),
-  lotSize: z.coerce.number().min(100, 'Lot size must be at least 100 sq ft.'),
+  address: z.string().min(5, 'Vui lòng nhập địa chỉ hợp lệ.'),
+  size: z.coerce.number().min(10, 'Diện tích phải lớn hơn 10m².'),
+  bedrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng ngủ.'),
+  bathrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng tắm.'),
+  lotSize: z.coerce.number().min(10, 'Diện tích lô đất phải lớn hơn 10m².'),
 });
 
 export async function getValuationAndSummary(
@@ -21,13 +21,13 @@ export async function getValuationAndSummary(
   if (!validatedFields.success) {
     return {
       success: false,
-      error: 'Invalid input. Please check the form fields.',
+      error: 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại các trường thông tin.',
     };
   }
 
   try {
     const marketData =
-      'The local market is currently experiencing high demand, with properties selling 5-10% above asking price. Recent infrastructure projects, including a new light rail station, have increased property values in the last 6 months. Average price per square foot is $285.';
+      'Thị trường địa phương đang có nhu cầu cao, các bất động sản đang được bán cao hơn 5-10% so với giá yêu cầu. Các dự án hạ tầng gần đây, bao gồm một trạm tàu điện mới, đã làm tăng giá trị bất động sản trong 6 tháng qua. Đơn giá trung bình mỗi mét vuông là 65 triệu đồng.';
 
     const valuationPromise = propertyValuationRange({
       ...validatedFields.data,
@@ -38,27 +38,27 @@ export async function getValuationAndSummary(
       location: {
         score: 9,
         details:
-          'Prime downtown location, walking distance to financial district and entertainment venues. High walkability score. Some street noise is expected.',
+          'Vị trí đắc địa tại trung tâm, gần khu tài chính và các địa điểm giải trí. Chỉ số đi bộ cao. Có thể có tiếng ồn từ đường phố.',
       },
       utilities: {
         score: 7,
         details:
-          'Well-served by public transport. Grocery stores are plentiful, but specialized shops require a short drive. A new clinic opened nearby recently.',
+          'Giao thông công cộng thuận tiện. Có nhiều cửa hàng tạp hóa, nhưng các cửa hàng đặc sản cần di chuyển một quãng ngắn. Một phòng khám mới vừa mở gần đây.',
       },
       planning: {
         score: 8,
         details:
-          'Area is part of a city revitalization plan, with new parks and public spaces planned. No major disruptive construction is scheduled in the immediate vicinity.',
+          'Khu vực nằm trong kế hoạch chỉnh trang đô thị, với các công viên và không gian công cộng mới được quy hoạch. Không có công trình xây dựng lớn gây ảnh hưởng trong thời gian tới.',
       },
       legal: {
         score: 10,
         details:
-          'Flawless legal status with all documents verified. No history of disputes or liens. Title is clear.',
+          'Tình trạng pháp lý hoàn hảo với đầy đủ giấy tờ đã được xác minh (sổ đỏ chính chủ). Không có lịch sử tranh chấp hay thế chấp. Sổ sách rõ ràng.',
       },
       quality: {
         score: 7,
         details:
-          'Modern construction (built 2018). High-quality finishes. The shared building amenities (gym, pool) are well-maintained. Some minor cosmetic wear in common areas.',
+          'Công trình xây dựng hiện đại (xây năm 2018). Nội thất cao cấp. Các tiện ích chung của tòa nhà (phòng gym, hồ bơi) được bảo trì tốt. Có một vài hao mòn nhỏ về thẩm mỹ ở khu vực chung.',
       },
     };
 
@@ -85,7 +85,7 @@ export async function getValuationAndSummary(
     console.error(error);
     return {
       success: false,
-      error: 'An unexpected error occurred while generating the valuation. Please try again later.',
+      error: 'Đã xảy ra lỗi không mong muốn trong quá trình định giá. Vui lòng thử lại sau.',
     };
   }
 }

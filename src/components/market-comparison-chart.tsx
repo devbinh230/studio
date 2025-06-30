@@ -26,27 +26,28 @@ export function MarketComparisonChart({ yourValue }: MarketComparisonChartProps)
         setIsMounted(true);
     }, []);
 
-    const marketAverage = yourValue * 1.05; // Mock data: market is 5% higher
+    const marketAverage = yourValue * 1.05; // Dữ liệu giả: thị trường cao hơn 5%
 
     const chartData = [
-      { name: "Your Value", value: yourValue, fill: "hsl(var(--primary))" },
-      { name: "Market Avg.", value: marketAverage, fill: "hsl(var(--accent))" },
+      { name: "Giá của bạn", value: yourValue, fill: "hsl(var(--primary))" },
+      { name: "TB Thị trường", value: marketAverage, fill: "hsl(var(--accent))" },
     ];
 
     const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('en-US', {
+        return new Intl.NumberFormat('vi-VN', {
             style: 'currency',
-            currency: 'USD',
+            currency: 'VND',
             maximumFractionDigits: 0,
+            notation: 'compact',
         }).format(value);
     }
   
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">Market Comparison</CardTitle>
+        <CardTitle className="font-headline">So sánh Thị trường</CardTitle>
         <CardDescription>
-          Your property's value versus the local market average.
+          Giá trị bất động sản của bạn so với giá trung bình thị trường.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -55,6 +56,7 @@ export function MarketComparisonChart({ yourValue }: MarketComparisonChartProps)
                 <BarChart
                     data={chartData}
                     margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
+                    barGap={8}
                 >
                     <CartesianGrid vertical={false} />
                     <YAxis

@@ -19,15 +19,15 @@ import type { CombinedResult } from '@/lib/types';
 import { Home, Loader2 } from 'lucide-react';
 
 const formSchema = z.object({
-  address: z.string().min(5, 'Please enter a valid address.'),
-  size: z.coerce.number().min(100, 'Size must be at least 100 sq ft.'),
-  bedrooms: z.coerce.number().min(1, 'Must have at least 1 bedroom.'),
-  bathrooms: z.coerce.number().min(1, 'Must have at least 1 bathroom.'),
-  lotSize: z.coerce.number().min(100, 'Lot size must be at least 100 sq ft.'),
+  address: z.string().min(5, 'Vui lòng nhập địa chỉ hợp lệ.'),
+  size: z.coerce.number().min(10, 'Diện tích phải lớn hơn 10m².'),
+  bedrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng ngủ.'),
+  bathrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng tắm.'),
+  lotSize: z.coerce.number().min(10, 'Diện tích lô đất phải lớn hơn 10m².'),
 });
 
 type PropertyInputFormProps = {
-  setResult: (data: CombinedResult) => void;
+  setResult: (data: CombinedResult | null) => void;
   setIsLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
 };
@@ -40,18 +40,18 @@ export function PropertyInputForm({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      address: '123 Main St, Anytown, USA',
-      size: 1800,
+      address: '19 Nguyễn Hữu Cảnh, Phường 19, Bình Thạnh, TP. HCM',
+      size: 110,
       bedrooms: 3,
       bathrooms: 2,
-      lotSize: 5000,
+      lotSize: 120,
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
-    setResult(null as any);
+    setResult(null);
 
     const result = await getValuationAndSummary(values);
 
@@ -68,10 +68,10 @@ export function PropertyInputForm({
       <CardHeader>
         <CardTitle className="font-headline text-2xl flex items-center gap-2">
           <Home className="h-6 w-6 text-primary" />
-          Property Details
+          Thông tin Bất động sản
         </CardTitle>
         <CardDescription>
-          Enter property information to get an AI-powered valuation.
+          Nhập thông tin bất động sản để nhận định giá bằng AI.
         </CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -82,9 +82,9 @@ export function PropertyInputForm({
               name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Address</FormLabel>
+                  <FormLabel>Địa chỉ</FormLabel>
                   <FormControl>
-                    <Input placeholder="123 Main St, Anytown, USA" {...field} />
+                    <Input placeholder="123 Đường ABC, Quận 1, TP. HCM" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -96,9 +96,9 @@ export function PropertyInputForm({
                 name="size"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Size (sq ft)</FormLabel>
+                    <FormLabel>Diện tích (m²)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="1800" {...field} />
+                      <Input type="number" placeholder="100" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -109,9 +109,9 @@ export function PropertyInputForm({
                 name="lotSize"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Lot Size (sq ft)</FormLabel>
+                    <FormLabel>Diện tích đất (m²)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="5000" {...field} />
+                      <Input type="number" placeholder="120" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -124,7 +124,7 @@ export function PropertyInputForm({
                 name="bedrooms"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Bedrooms</FormLabel>
+                    <FormLabel>Phòng ngủ</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="3" {...field} />
                     </FormControl>
@@ -137,7 +137,7 @@ export function PropertyInputForm({
                 name="bathrooms"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Bathrooms</FormLabel>
+                    <FormLabel>Phòng tắm</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="2" {...field} />
                     </FormControl>
@@ -152,10 +152,10 @@ export function PropertyInputForm({
               {form.formState.isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Valuating...
+                  Đang định giá...
                 </>
               ) : (
-                'Get Valuation'
+                'Xem định giá'
               )}
             </Button>
           </CardFooter>

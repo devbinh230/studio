@@ -5,11 +5,16 @@ import type { ValuationResult } from '@/lib/types';
 import { TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
+type ValuationDisplayProps = {
+  valuation: ValuationResult;
+};
+
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'VND',
     maximumFractionDigits: 0,
+    notation: 'compact',
   }).format(value);
 };
 
@@ -27,7 +32,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
           <div className="flex flex-col items-center gap-1 px-2">
             <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
               <TrendingDown className="h-4 w-4 text-chart-3" />
-              Low Value
+              Giá tham khảo thấp
             </h3>
             <p className="text-xl md:text-2xl font-bold text-chart-3">
               {isMounted ? formatCurrency(valuation.lowValue) : '...'}
@@ -36,7 +41,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
           <div className="flex flex-col items-center gap-2 px-4">
             <h3 className="text-base font-semibold text-primary flex items-center gap-1">
               <DollarSign className="h-5 w-5" />
-              Reasonable Value
+              Giá trị hợp lý
             </h3>
             <p className="text-3xl md:text-5xl font-bold font-headline text-primary">
               {isMounted ? formatCurrency(valuation.reasonableValue) : '...'}
@@ -45,7 +50,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
           <div className="flex flex-col items-center gap-1 px-2">
             <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-4 w-4 text-chart-2" />
-              High Value
+              Giá tham khảo cao
             </h3>
             <p className="text-xl md:text-2xl font-bold text-chart-2">
               {isMounted ? formatCurrency(valuation.highValue) : '...'}

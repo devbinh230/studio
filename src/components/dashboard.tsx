@@ -37,7 +37,7 @@ export default function Dashboard() {
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+          <section className="lg:col-span-2 space-y-8">
             <PropertyInputForm
               setResult={handleValuation}
               setIsLoading={setIsLoading}
@@ -62,13 +62,30 @@ export default function Dashboard() {
                 />
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="lg:col-span-1 space-y-8">
-            {result && <ScoringRadarChart details={result.summaryDetails} />}
-            <MapView />
-            <ComparableSales />
-          </div>
+          <aside className="lg:col-span-1 space-y-8">
+            {result ? (
+              <>
+                <ScoringRadarChart details={result.summaryDetails} />
+                <MapView />
+                <ComparableSales />
+              </>
+            ) : (
+             !isLoading && (
+                <div className="space-y-8">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-headline">Bắt đầu</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-muted-foreground">Nhập thông tin chi tiết về bất động sản của bạn vào biểu mẫu bên trái để nhận phân tích và định giá do AI cung cấp.</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            )}
+          </aside>
         </div>
       </main>
     </div>

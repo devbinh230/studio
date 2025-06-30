@@ -10,17 +10,17 @@ import { ComparableSales } from '@/components/comparable-sales';
 export default async function DemoPage() {
   // Mock data for the demo page, as if it was submitted through the form
   const mockPropertyInput = {
-    address: '123 Main St, Anytown, USA',
-    size: 1800,
+    address: '19 Nguyễn Hữu Cảnh, Phường 19, Bình Thạnh, Thành phố Hồ Chí Minh',
+    size: 110,
     bedrooms: 3,
     bathrooms: 2,
-    lotSize: 5000,
+    lotSize: 120,
   };
 
   const result = await getValuationAndSummary(mockPropertyInput);
-
+  
   if (!result.success) {
-    return <p className="text-destructive text-center p-8">Failed to load demo data: {result.error}</p>;
+    return <p className="text-destructive text-center p-8">Không thể tải dữ liệu demo: {result.error}</p>;
   }
 
   const { data } = result;
@@ -31,7 +31,7 @@ export default async function DemoPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-2xl font-bold font-headline text-primary">
-              EstateValuate (Demo)
+              EstateValuate (Bản Demo)
             </h1>
           </div>
         </div>
@@ -39,7 +39,7 @@ export default async function DemoPage() {
 
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+          <section className="lg:col-span-2 space-y-8">
             <div className="space-y-8">
               <ValuationDisplay valuation={data.valuation} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -53,13 +53,13 @@ export default async function DemoPage() {
                 details={data.summaryDetails}
               />
             </div>
-          </div>
+          </section>
 
-          <div className="lg:col-span-1 space-y-8">
+          <aside className="lg:col-span-1 space-y-8">
             <ScoringRadarChart details={data.summaryDetails} />
             <MapView />
             <ComparableSales />
-          </div>
+          </aside>
         </div>
       </main>
     </div>

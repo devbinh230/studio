@@ -16,33 +16,29 @@ import {
 import { Skeleton } from './ui/skeleton';
 
 const chartData = [
-    { month: 'Jan', price: 250 },
-    { month: 'Feb', price: 255 },
-    { month: 'Mar', price: 260 },
-    { month: 'Apr', price: 258 },
-    { month: 'May', price: 265 },
-    { month: 'Jun', price: 270 },
-    { month: 'Jul', price: 275 },
-    { month: 'Aug', price: 280 },
-    { month: 'Sep', price: 282 },
-    { month: 'Oct', price: 285 },
-    { month: 'Nov', price: 290 },
-    { month: 'Dec', price: 295 },
+    { month: 'T1', price: 65 },
+    { month: 'T2', price: 66 },
+    { month: 'T3', price: 68 },
+    { month: 'T4', price: 67 },
+    { month: 'T5', price: 70 },
+    { month: 'T6', price: 72 },
+    { month: 'T7', price: 73 },
+    { month: 'T8', price: 75 },
+    { month: 'T9', price: 76 },
+    { month: 'T10', price: 78 },
+    { month: 'T11', price: 80 },
+    { month: 'T12', price: 82 },
 ];
 
 const chartConfig = {
   price: {
-    label: 'Price/sq ft',
+    label: 'Giá/m²',
     color: 'hsl(var(--primary))',
   },
 };
 
-const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0,
-    }).format(value);
+const formatTooltipValue = (value: number) => {
+    return `${new Intl.NumberFormat('vi-VN').format(value * 1000000)}/m²`;
 }
 
 
@@ -56,13 +52,13 @@ export function PriceTrendChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">Price Trend Analysis</CardTitle>
-        <CardDescription>Price per sq. ft. in the vicinity (last 12 months)</CardDescription>
+        <CardTitle className="font-headline">Phân tích Xu hướng giá</CardTitle>
+        <CardDescription>Đơn giá/m² trong khu vực (12 tháng qua)</CardDescription>
       </CardHeader>
       <CardContent>
       {isMounted ? (
         <ChartContainer config={chartConfig} className="h-48 w-full">
-          <LineChart data={chartData} margin={{ left: 12, right: 12 }}>
+          <LineChart data={chartData} margin={{ left: 0, right: 12 }}>
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="month"
@@ -74,13 +70,13 @@ export function PriceTrendChart() {
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                tickFormatter={(value) => `$${value}`}
+                tickFormatter={(value) => `${value}tr`}
              />
             <Tooltip
                 cursor={false}
                 content={<ChartTooltipContent 
                     indicator="dot" 
-                    formatter={(value) => `${formatCurrency(value as number)}/sq ft`}
+                    formatter={(value) => formatTooltipValue(value as number)}
                 />} />
             <Line
               dataKey="price"
