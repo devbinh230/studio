@@ -3,10 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import type { ValuationResult } from '@/lib/types';
 import { TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
-
-type ValuationDisplayProps = {
-  valuation: ValuationResult;
-};
+import { useState, useEffect } from 'react';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('en-US', {
@@ -17,6 +14,12 @@ const formatCurrency = (value: number) => {
 };
 
 export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <Card className="shadow-lg">
       <CardContent className="pt-6">
@@ -27,7 +30,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
               Low Value
             </h3>
             <p className="text-xl md:text-2xl font-bold text-chart-3">
-              {formatCurrency(valuation.lowValue)}
+              {isMounted ? formatCurrency(valuation.lowValue) : '...'}
             </p>
           </div>
           <div className="flex flex-col items-center gap-2 px-4">
@@ -36,7 +39,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
               Reasonable Value
             </h3>
             <p className="text-3xl md:text-5xl font-bold font-headline text-primary">
-              {formatCurrency(valuation.reasonableValue)}
+              {isMounted ? formatCurrency(valuation.reasonableValue) : '...'}
             </p>
           </div>
           <div className="flex flex-col items-center gap-1 px-2">
@@ -45,7 +48,7 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
               High Value
             </h3>
             <p className="text-xl md:text-2xl font-bold text-chart-2">
-              {formatCurrency(valuation.highValue)}
+              {isMounted ? formatCurrency(valuation.highValue) : '...'}
             </p>
           </div>
         </div>

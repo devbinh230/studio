@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BedDouble, Bath, LayoutPanelLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const comparableProperties = [
     {
@@ -44,6 +45,12 @@ const formatCurrency = (value: number) => {
   };
 
 export function ComparableSales() {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <Card>
         <CardHeader>
@@ -62,7 +69,7 @@ export function ComparableSales() {
                         className="rounded-lg object-cover aspect-square"
                     />
                     <div className="flex-grow">
-                        <p className="font-semibold">{formatCurrency(prop.price)}</p>
+                        <p className="font-semibold">{isMounted ? formatCurrency(prop.price) : '...'}</p>
                         <p className="text-sm text-muted-foreground">{prop.address}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                             <Badge variant="secondary" className="flex items-center gap-1"><BedDouble className="h-3 w-3" /> {prop.beds}</Badge>
