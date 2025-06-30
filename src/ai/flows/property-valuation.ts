@@ -12,19 +12,19 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const PropertyValuationRangeInputSchema = z.object({
-  address: z.string().describe('The address of the property.'),
-  size: z.number().describe('The size of the property in square feet.'),
-  bedrooms: z.number().describe('The number of bedrooms in the property.'),
-  bathrooms: z.number().describe('The number of bathrooms in the property.'),
-  lotSize: z.number().describe('The size of the lot in square feet.'),
-  marketData: z.string().describe('Current market data for comparable properties in the area.'),
+  address: z.string().describe('Địa chỉ của bất động sản.'),
+  size: z.number().describe('Diện tích của bất động sản tính bằng mét vuông.'),
+  bedrooms: z.number().describe('Số lượng phòng ngủ của bất động sản.'),
+  bathrooms: z.number().describe('Số lượng phòng tắm của bất động sản.'),
+  lotSize: z.number().describe('Diện tích lô đất tính bằng mét vuông.'),
+  marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
 const PropertyValuationRangeOutputSchema = z.object({
-  lowValue: z.number().describe('The minimum possible price for the property.'),
-  reasonableValue: z.number().describe('The most likely price for the property.'),
-  highValue: z.number().describe('The maximum achievable price for the property.'),
+  lowValue: z.number().describe('Giá thấp nhất có thể cho bất động sản.'),
+  reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản.'),
+  highValue: z.number().describe('Giá cao nhất có thể đạt được cho bất động sản.'),
 });
 export type PropertyValuationRangeOutput = z.infer<typeof PropertyValuationRangeOutputSchema>;
 
@@ -36,22 +36,19 @@ const prompt = ai.definePrompt({
   name: 'propertyValuationRangePrompt',
   input: {schema: PropertyValuationRangeInputSchema},
   output: {schema: PropertyValuationRangeOutputSchema},
-  prompt: `You are an expert real estate appraiser. Based on the property details and market data provided, estimate a value range for the property.
+  prompt: `Bạn là một chuyên gia thẩm định giá bất động sản. Dựa trên thông tin chi tiết về bất động sản và dữ liệu thị trường được cung cấp, hãy ước tính một khoảng giá trị cho bất động sản.
 
-Property Details:
-Address: {{{address}}}
-Size: {{{size}}} sq ft
-Bedrooms: {{{bedrooms}}}
-Bathrooms: {{{bathrooms}}}
-Lot Size: {{{lotSize}}} sq ft
+Thông tin chi tiết bất động sản:
+Địa chỉ: {{{address}}}
+Diện tích: {{{size}}} m2
+Số phòng ngủ: {{{bedrooms}}}
+Số phòng tắm: {{{bathrooms}}}
+Diện tích lô đất: {{{lotSize}}} m2
 
-Market Data:
+Dữ liệu thị trường:
 {{{marketData}}}
 
-Provide the estimated value range in the following format:
-Low Value: [minimum possible price]
-Reasonable Value: [most likely price]
-High Value: [maximum achievable price]`,
+Hãy ước tính và cung cấp giá trị thấp, giá trị hợp lý và giá trị cao cho bất động sản.`,
 });
 
 const propertyValuationRangeFlow = ai.defineFlow(
