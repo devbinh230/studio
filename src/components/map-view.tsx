@@ -25,6 +25,7 @@ export function MapView() {
             height={600}
             className="h-full w-full object-cover"
             data-ai-hint="map city"
+            priority
           />
         </div>
       </CardContent>

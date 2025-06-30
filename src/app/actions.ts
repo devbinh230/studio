@@ -27,7 +27,7 @@ export async function getValuationAndSummary(
 
   try {
     const marketData =
-      'Comparable properties in the area have sold for between $450,000 and $550,000 in the last 3 months. The market is currently stable with a slight upward trend. Properties near public transport and good schools tend to sell for a premium.';
+      'The local market is currently experiencing high demand, with properties selling 5-10% above asking price. Recent infrastructure projects, including a new light rail station, have increased property values in the last 6 months. Average price per square foot is $285.';
 
     const valuationPromise = propertyValuationRange({
       ...validatedFields.data,
@@ -36,29 +36,29 @@ export async function getValuationAndSummary(
 
     const summaryDetails = {
       location: {
-        score: 8,
-        details:
-          'Located in a quiet suburb with good access to downtown. Low crime rate and within the boundary of a well-regarded school district. Close to two parks and a community center.',
-      },
-      utilities: {
         score: 9,
         details:
-          'Excellent access to utilities. 5-minute walk to the nearest supermarket and pharmacy. A large hospital is a 10-minute drive away. Multiple cafes and restaurants nearby.',
+          'Prime downtown location, walking distance to financial district and entertainment venues. High walkability score. Some street noise is expected.',
       },
-      planning: {
+      utilities: {
         score: 7,
         details:
-          'The area is zoned for residential use with no major construction planned nearby, ensuring neighborhood stability. Some commercial rezoning is expected on the main boulevard, which may increase traffic.',
+          'Well-served by public transport. Grocery stores are plentiful, but specialized shops require a short drive. A new clinic opened nearby recently.',
+      },
+      planning: {
+        score: 8,
+        details:
+          'Area is part of a city revitalization plan, with new parks and public spaces planned. No major disruptive construction is scheduled in the immediate vicinity.',
       },
       legal: {
         score: 10,
         details:
-          'Clear title with all legal documents (Red Book equivalent) in order. No outstanding liens or encumbrances on the property. Property taxes are fully paid up to date.',
+          'Flawless legal status with all documents verified. No history of disputes or liens. Title is clear.',
       },
       quality: {
-        score: 6,
+        score: 7,
         details:
-          'The building is structurally sound but shows signs of age. The roof was replaced 5 years ago, but the HVAC system is over 15 years old and may need replacement soon. Cosmetic updates are recommended.',
+          'Modern construction (built 2018). High-quality finishes. The shared building amenities (gym, pool) are well-maintained. Some minor cosmetic wear in common areas.',
       },
     };
 
