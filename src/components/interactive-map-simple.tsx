@@ -31,6 +31,7 @@ interface InteractiveMapProps {
   initialLocation?: { lat: number; lng: number };
   authToken?: string;
   showValuationButton?: boolean;
+  selectedLocation?: LocationData | null;
 }
 
 interface SearchSuggestion {
@@ -85,9 +86,10 @@ export function InteractiveMapSimple({
   onLocationSelect, 
   initialLocation = { lat: 21.0282993, lng: 105.8539963 }, // Hanoi center
   authToken,
-  showValuationButton = true
+  showValuationButton = true,
+  selectedLocation
 }: InteractiveMapProps) {
-  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
+  const [selectedLocationState, setSelectedLocation] = useState<LocationData | null>(selectedLocation || null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchAddress, setSearchAddress] = useState('');
@@ -100,8 +102,6 @@ export function InteractiveMapSimple({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-
-
 
   // Leaflet icon fix for Next.js
   useEffect(() => {
@@ -132,6 +132,23 @@ export function InteractiveMapSimple({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Sync with external selectedLocation prop từ Dashboard
+  useEffect(() => {
+    if (selectedLocation && selectedLocation !== selectedLocationState) {
+      setSelectedLocation(selectedLocation);
+      // Update map center và marker position
+      const lat = selectedLocation.latitude;
+      const lng = selectedLocation.longitude;
+      zoomToLocation(lat, lng, 16);
+      setMarkerPosition([lat, lng]);
+      
+      // Update search address nếu có
+      if (selectedLocation.address) {
+        setSearchAddress(selectedLocation.address);
+      }
+    }
+  }, [selectedLocation, selectedLocationState]);
 
   // Handle when map is ready
   const handleMapReady = useCallback((map: any) => {
@@ -372,7 +389,7 @@ export function InteractiveMapSimple({
   };
 
   const handleValuation = async () => {
-    if (!selectedLocation || !authToken) {
+    if (!selectedLocationState || !authToken) {
       toast({
         title: "Lỗi",
         description: "Vui lòng chọn vị trí và cung cấp auth token",
@@ -389,8 +406,8 @@ export function InteractiveMapSimple({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
+          latitude: selectedLocationState.latitude,
+          longitude: selectedLocationState.longitude,
           property_details: {
             type: 'town_house',
             landArea: 60.0,
@@ -428,8 +445,6 @@ export function InteractiveMapSimple({
       setIsLoading(false);
     }
   };
-
-
 
   const handleInteractiveMapClick = (lat: number, lng: number) => {
     toast({
@@ -559,22 +574,22 @@ export function InteractiveMapSimple({
         </div>
 
         {/* Selected Location Info */}
-        {selectedLocation && (
+        {selectedLocationState && (
           <div className="p-3 bg-gray-50 rounded-lg space-y-2">
             <h4 className="font-medium flex items-center gap-2">
               <MapPin className="h-4 w-4" />
               Vị trí đã chọn
             </h4>
             <div className="space-y-1 text-sm">
-              {selectedLocation.address && (
-                <p><strong>Địa chỉ:</strong> {selectedLocation.address}</p>
+              {selectedLocationState.address && (
+                <p><strong>Địa chỉ:</strong> {selectedLocationState.address}</p>
               )}
-              <p><strong>Tọa độ:</strong> {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}</p>
-              {selectedLocation.city && (
+              <p><strong>Tọa độ:</strong> {selectedLocationState.latitude.toFixed(6)}, {selectedLocationState.longitude.toFixed(6)}</p>
+              {selectedLocationState.city && (
                 <div className="flex gap-2 flex-wrap">
-                  <Badge variant="secondary">{selectedLocation.city}</Badge>
-                  {selectedLocation.district && <Badge variant="secondary">{selectedLocation.district}</Badge>}
-                  {selectedLocation.ward && <Badge variant="secondary">{selectedLocation.ward}</Badge>}
+                  <Badge variant="secondary">{selectedLocationState.city}</Badge>
+                  {selectedLocationState.district && <Badge variant="secondary">{selectedLocationState.district}</Badge>}
+                  {selectedLocationState.ward && <Badge variant="secondary">{selectedLocationState.ward}</Badge>}
                 </div>
               )}
             </div>
@@ -621,14 +636,14 @@ export function InteractiveMapSimple({
                 {markerPosition && (
                   <Marker position={markerPosition}>
                     <Popup>
-                      {selectedLocation ? (
+                      {selectedLocationState ? (
                         <div className="p-2">
                           <p className="font-medium">Vị trí đã chọn</p>
-                          {selectedLocation.address && (
-                            <p className="text-sm text-gray-600">{selectedLocation.address}</p>
+                          {selectedLocationState.address && (
+                            <p className="text-sm text-gray-600">{selectedLocationState.address}</p>
                           )}
                           <p className="text-xs text-gray-500">
-                            {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                            {selectedLocationState.latitude.toFixed(6)}, {selectedLocationState.longitude.toFixed(6)}
                           </p>
                         </div>
                       ) : (
