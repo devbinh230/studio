@@ -13,7 +13,7 @@ const comparableProperties = [
         area: 125,
         beds: 3,
         baths: 2,
-        image: 'https://file4.batdongsan.com.vn/2025/06/30/20250630135527-e3db_wm.jpg',
+        image: 'https://masteriwaterfrontoceanpark.com/wp-content/uploads/2023/08/phong-khach-can-ho-master-waterfront.jpg',
         aiHint: 'luxury apartment',
     },
     {
@@ -22,7 +22,7 @@ const comparableProperties = [
         area: 110,
         beds: 2,
         baths: 2,
-        image: 'https://file4.batdongsan.com.vn/2025/04/24/20250424084827-4010_wm.jpg',
+        image: 'https://masterihomes.com.vn/wp-content/uploads/2021/05/can-ho-mau-masteri-centre-point-18.jpg',
         aiHint: 'modern residence',
     },
     {
@@ -31,7 +31,7 @@ const comparableProperties = [
         area: 140,
         beds: 3,
         baths: 3,
-        image: 'https://file4.batdongsan.com.vn/2025/06/30/20250630133642-c0ce_wm.jpg',
+        image: 'https://masterisevietnam.com/wp-content/uploads/2021/06/phong-bep-1-ngu-masteri-west-heights.jpg',
         aiHint: 'riverside apartment',
     },
 ];

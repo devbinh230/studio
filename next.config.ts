@@ -24,7 +24,19 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'file4.batdongsan.com.vn',
+        hostname: 'masterisevietnam.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'masteriwaterfrontoceanpark.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'masterihomes.com.vn',
         port: '',
         pathname: '/**',
       },
