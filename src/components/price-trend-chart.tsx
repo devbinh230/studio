@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import {
   Card,
@@ -12,6 +13,7 @@ import {
   ChartContainer,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { Skeleton } from './ui/skeleton';
 
 const chartData = [
     { month: 'Jan', price: 250 },
@@ -45,6 +47,12 @@ const formatCurrency = (value: number) => {
 
 
 export function PriceTrendChart() {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+      setIsMounted(true);
+  }, []);
+
   return (
     <Card>
       <CardHeader>
@@ -52,6 +60,7 @@ export function PriceTrendChart() {
         <CardDescription>Price per sq. ft. in the vicinity (last 12 months)</CardDescription>
       </CardHeader>
       <CardContent>
+      {isMounted ? (
         <ChartContainer config={chartConfig} className="h-48 w-full">
           <LineChart data={chartData} margin={{ left: 12, right: 12 }}>
             <CartesianGrid vertical={false} />
@@ -82,6 +91,9 @@ export function PriceTrendChart() {
             />
           </LineChart>
         </ChartContainer>
+      ) : (
+          <Skeleton className="h-48 w-full" />
+      )}
       </CardContent>
     </Card>
   );
