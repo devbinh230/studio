@@ -44,24 +44,26 @@ export function MarketComparisonChart({ yourValue }: MarketComparisonChartProps)
       <CardContent>
         <ChartContainer config={{}} className="h-48 w-full">
             <BarChart
-                layout="vertical"
                 data={chartData}
-                margin={{ left: 10, right: 10 }}
+                margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
             >
-                <CartesianGrid horizontal={false} />
+                <CartesianGrid vertical={false} />
                 <YAxis
+                    type="number"
+                    hide
+                />
+                <XAxis
                     dataKey="name"
                     type="category"
                     tickLine={false}
                     axisLine={false}
                     tickMargin={10}
                 />
-                <XAxis type="number" hide />
                 <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))' }}
                     content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />}
                 />
-                <Bar dataKey="value" radius={4} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]} />
             </BarChart>
         </ChartContainer>
       </CardContent>

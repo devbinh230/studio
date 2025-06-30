@@ -23,10 +23,10 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
         <div className="grid grid-cols-3 items-center text-center divide-x">
           <div className="flex flex-col items-center gap-1 px-2">
             <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingDown className="h-4 w-4 text-red-500" />
+              <TrendingDown className="h-4 w-4 text-chart-3" />
               Low Value
             </h3>
-            <p className="text-xl md:text-2xl font-bold text-red-600">
+            <p className="text-xl md:text-2xl font-bold text-chart-3">
               {formatCurrency(valuation.lowValue)}
             </p>
           </div>
@@ -41,10 +41,10 @@ export function ValuationDisplay({ valuation }: ValuationDisplayProps) {
           </div>
           <div className="flex flex-col items-center gap-1 px-2">
             <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-4 w-4 text-green-500" />
+              <TrendingUp className="h-4 w-4 text-chart-2" />
               High Value
             </h3>
-            <p className="text-xl md:text-2xl font-bold text-green-600">
+            <p className="text-xl md:text-2xl font-bold text-chart-2">
               {formatCurrency(valuation.highValue)}
             </p>
           </div>
