@@ -4,8 +4,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'EstateValuate - Định giá Bất động sản',
-  description: 'Định giá Bất động sản bằng Trí tuệ Nhân tạo',
+  title: 'EstateValuate - AI Property Valuation',
+  description: 'Real estate property valuation with AI-powered analysis and interactive maps',
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" suppressHydrationWarning className="dark">
+    <html lang="vi" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -23,11 +23,11 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className={cn('font-body antialiased')} suppressHydrationWarning>
+      <body className={cn('font-sans antialiased')} suppressHydrationWarning>
         {children}
         <Toaster />
       </body>

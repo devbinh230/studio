@@ -24,6 +24,25 @@ export function ScoringRadarChart({ details }: ScoringRadarChartProps) {
     setIsMounted(true);
   }, []);
 
+  // Guard clause for undefined details
+  if (!details || !details.location) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Chấm điểm Đa tiêu chí</CardTitle>
+          <CardDescription>
+            Chờ dữ liệu định giá để hiển thị biểu đồ.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pb-0">
+          <div className="mx-auto aspect-square h-64 flex items-center justify-center pb-6">
+            <Skeleton className="h-full w-full rounded-full" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const chartData = [
     { criterion: 'Vị trí', score: details.location.score },
     { criterion: 'Tiện ích', score: details.utilities.score },
