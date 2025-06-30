@@ -172,6 +172,10 @@ export default function MapDemoPage() {
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-green-500">✅</span>
+                  <span>Bản đồ Leaflet tương tác với click trực tiếp</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-green-500">✅</span>
                   <span>Tích hợp với API định giá bất động sản</span>
                 </div>
                 <div className="flex items-start gap-2">
@@ -197,11 +201,13 @@ export default function MapDemoPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2 text-sm">
-                <p><strong>1.</strong> Tìm kiếm địa chỉ trong ô search</p>
-                <p><strong>2.</strong> Hoặc nhấn "Vị trí hiện tại" để dùng GPS</p>
-                <p><strong>3.</strong> Hoặc click vào các nút chọn nhanh</p>
-                <p><strong>4.</strong> Nhấn "Định giá tại vị trí này" để thực hiện định giá</p>
-                <p><strong>5.</strong> Kết quả sẽ hiển thị trong console và toast</p>
+                <p><strong>1.</strong> Chọn mode Static hoặc Interactive</p>
+                <p><strong>2.</strong> Click trực tiếp trên bản đồ (Interactive mode)</p>
+                <p><strong>3.</strong> Tìm kiếm địa chỉ trong ô search</p>
+                <p><strong>4.</strong> Hoặc nhấn "Vị trí hiện tại" để dùng GPS</p>
+                <p><strong>5.</strong> Hoặc click vào các nút chọn nhanh</p>
+                <p><strong>6.</strong> Nhấn "Định giá tại vị trí này" để thực hiện định giá</p>
+                <p><strong>7.</strong> Kết quả sẽ hiển thị trong console và toast</p>
               </div>
             </CardContent>
           </Card>

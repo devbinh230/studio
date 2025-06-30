@@ -108,6 +108,7 @@ export default function Dashboard() {
               setIsLoading={setIsLoading}
               setError={setError}
               selectedLocation={selectedLocation}
+              onLocationSelect={handleLocationSelect}
             />
 
             {isLoading && <LoadingState />}

@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -19,9 +19,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { getValuationAndSummary } from '@/app/actions';
 import type { CombinedResult } from '@/lib/types';
-import { Home, Loader2, Cpu, Globe } from 'lucide-react';
+import { Home, Loader2, Cpu, Globe, MapPin, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getDefaultAuthToken } from '@/lib/config';
+import { getDefaultAuthToken, getGeoapifyApiKey } from '@/lib/config';
 
 const formSchema = z.object({
   address: z.string().min(5, 'Vui lòng nhập địa chỉ hợp lệ.'),
@@ -40,11 +40,22 @@ interface LocationData {
   ward?: string;
 }
 
+interface SearchSuggestion {
+  formatted: string;
+  lat: number;
+  lon: number;
+  place_id: string;
+  address_line1?: string;
+  address_line2?: string;
+  category?: string;
+}
+
 type PropertyInputFormProps = {
   setResult: (data: CombinedResult | null) => void;
   setIsLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   selectedLocation?: LocationData | null;
+  onLocationSelect?: (location: LocationData) => void;
 };
 
 export function PropertyInputForm({
@@ -52,8 +63,14 @@ export function PropertyInputForm({
   setIsLoading,
   setError,
   selectedLocation,
+  onLocationSelect,
 }: PropertyInputFormProps) {
   const [useRealApi, setUseRealApi] = useState(true); // Default to real API
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,8 +88,106 @@ export function PropertyInputForm({
   useEffect(() => {
     if (selectedLocation?.address) {
       form.setValue('address', selectedLocation.address);
+      // Clear suggestions when auto-filling from map
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
   }, [selectedLocation, form]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current && 
+        !suggestionsRef.current.contains(event.target as Node) &&
+        addressInputRef.current &&
+        !addressInputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchSuggestions = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const response = await fetch(
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
+          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
+          lat: feature.properties.lat,
+          lon: feature.properties.lon,
+          place_id: feature.properties.place_id || Math.random().toString(),
+          address_line1: feature.properties.address_line1,
+          address_line2: feature.properties.address_line2,
+          category: feature.properties.category,
+        }));
+        
+        setSuggestions(suggestionsList);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = async (suggestion: SearchSuggestion) => {
+    form.setValue('address', suggestion.formatted);
+    setShowSuggestions(false);
+    
+    // Tạo LocationData từ suggestion và gọi onLocationSelect
+    if (onLocationSelect) {
+      const locationData: LocationData = {
+        latitude: suggestion.lat,
+        longitude: suggestion.lon,
+        address: suggestion.formatted,
+        // Có thể parse thêm city, district, ward từ address nếu cần
+      };
+      onLocationSelect(locationData);
+    }
+    
+    toast({
+      title: "Đã chọn địa chỉ",
+      description: suggestion.formatted,
+    });
+  };
+
+  const handleAddressInputChange = (value: string) => {
+    form.setValue('address', value);
+    
+    // Debounce suggestions fetch
+    const timeoutId = setTimeout(() => {
+      fetchSuggestions(value);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  };
+
+  const clearAddressInput = () => {
+    form.setValue('address', '');
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -205,16 +320,86 @@ export function PropertyInputForm({
                 <FormItem>
                   <FormLabel>Địa chỉ</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="123 Đường ABC, Quận 1, TP. HCM" 
-                      {...field}
-                      className={selectedLocation ? 'bg-green-50 border-green-200' : ''}
-                    />
+                    <div className="relative">
+                      <Input 
+                        ref={addressInputRef}
+                        placeholder="Nhập địa chỉ (VD: Hoàn Kiếm, Hà Nội)..." 
+                        value={field.value}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleAddressInputChange(e.target.value);
+                        }}
+                        onFocus={() => field.value.length > 1 && fetchSuggestions(field.value)}
+                        className={selectedLocation ? 'bg-green-50 border-green-200' : ''}
+                      />
+                      {field.value && (
+                        <button
+                          type="button"
+                          onClick={clearAddressInput}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                      
+                      {/* Search Suggestions Dropdown */}
+                      {showSuggestions && (
+                        <div 
+                          ref={suggestionsRef}
+                          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        >
+                          {isLoadingSuggestions ? (
+                            <div className="p-3 text-center text-gray-500">
+                              <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                              <span className="text-sm">Đang tìm kiếm...</span>
+                            </div>
+                          ) : suggestions.length > 0 ? (
+                            <div className="py-1">
+                              {suggestions.map((suggestion, index) => (
+                                <button
+                                  key={suggestion.place_id || index}
+                                  type="button"
+                                  onClick={() => handleSuggestionClick(suggestion)}
+                                  className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                        {suggestion.address_line1 || suggestion.formatted}
+                                      </p>
+                                      {suggestion.address_line2 && (
+                                        <p className="text-xs text-gray-500 truncate">
+                                          {suggestion.address_line2}
+                                        </p>
+                                      )}
+                                      {suggestion.category && (
+                                        <Badge variant="outline" className="text-xs mt-1">
+                                          {suggestion.category}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 text-center text-gray-500">
+                              <span className="text-sm">Không tìm thấy kết quả</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </FormControl>
                   <FormMessage />
-                  {selectedLocation && (
+                  {selectedLocation ? (
                     <p className="text-xs text-green-600">
-                      ✅ Địa chỉ được tự động điền từ vị trí đã chọn
+                      ✅ Địa chỉ được tự động điền từ vị trí đã chọn trên bản đồ
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      💡 Gõ địa chỉ để xem gợi ý tự động
                     </p>
                   )}
                 </FormItem>

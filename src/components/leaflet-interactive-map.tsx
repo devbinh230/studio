@@ -1,21 +1,19 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect, useState, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { Icon, LatLngExpression } from 'leaflet';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MapPin, Loader2, Navigation, Search, X, Map, Image } from 'lucide-react';
+import { MapPin, Loader2, Navigation, Search, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { getGeoapifyApiKey } from '@/lib/config';
 
-// Dynamic import của Leaflet components để tránh SSR issues
-const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false });
-const Popup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false });
+// Import Leaflet CSS
+import 'leaflet/dist/leaflet.css';
 
 interface LocationData {
   latitude: number;
@@ -26,7 +24,7 @@ interface LocationData {
   ward?: string;
 }
 
-interface InteractiveMapProps {
+interface LeafletInteractiveMapProps {
   onLocationSelect?: (location: LocationData) => void;
   initialLocation?: { lat: number; lng: number };
   authToken?: string;
@@ -43,78 +41,44 @@ interface SearchSuggestion {
   category?: string;
 }
 
-// Component xử lý click event trên Leaflet map
-const MapClickHandler = dynamic(() => 
-  Promise.resolve().then(() => {
-    const { useMapEvents } = require('react-leaflet');
-    
-    return function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
-      useMapEvents({
-        click: (event: any) => {
-          const { lat, lng } = event.latlng;
-          onMapClick(lat, lng);
-        },
-      });
-      return null;
-    };
-  }),
-  { ssr: false }
-);
+// Custom marker icon để fix lỗi default icon của Leaflet
+const customIcon = new Icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
-// Component để handle map events và set reference
-const MapEvents = dynamic(() => 
-  Promise.resolve().then(() => {
-    const { useMap } = require('react-leaflet');
-    
-    return function MapEventsComponent({ onMapReady }: { onMapReady: (map: any) => void }) {
-      const map = useMap();
-      
-      useEffect(() => {
-        if (map) {
-          onMapReady(map);
-        }
-      }, [map, onMapReady]);
-      
-      return null;
-    };
-  }),
-  { ssr: false }
-);
+// Component xử lý click event trên map
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (event) => {
+      const { lat, lng } = event.latlng;
+      onMapClick(lat, lng);
+    },
+  });
+  return null;
+}
 
-export function InteractiveMapSimple({ 
+export function LeafletInteractiveMap({ 
   onLocationSelect, 
   initialLocation = { lat: 21.0282993, lng: 105.8539963 }, // Hanoi center
   authToken,
-  showValuationButton = true
-}: InteractiveMapProps) {
+  showValuationButton = true 
+}: LeafletInteractiveMapProps) {
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
+  const [mapCenter, setMapCenter] = useState<LatLngExpression>([initialLocation.lat, initialLocation.lng]);
+  const [markerPosition, setMarkerPosition] = useState<LatLngExpression | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [searchAddress, setSearchAddress] = useState('');
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([initialLocation.lat, initialLocation.lng]);
-  const [mapZoom, setMapZoom] = useState(15);
-  const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-
-
-
-  // Leaflet icon fix for Next.js
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const L = require('leaflet');
-      delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      });
-    }
-  }, []);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -133,31 +97,11 @@ export function InteractiveMapSimple({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle when map is ready
-  const handleMapReady = useCallback((map: any) => {
-    mapRef.current = map;
-  }, []);
-
-  // Function to smoothly zoom and center to a location
-  const zoomToLocation = (lat: number, lng: number, zoom = 16) => {
-    setMapCenter([lat, lng]);
-    setMapZoom(zoom);
-    
-    // If map instance is available, use flyTo for smooth animation
-    if (mapRef.current) {
-      const map = mapRef.current;
-      map.flyTo([lat, lng], zoom, {
-        duration: 1.5, // Animation duration in seconds
-        easeLinearity: 0.25
-      });
-    }
-  };
-
   const handleLocationSelect = async (lat: number, lng: number) => {
     setIsLoading(true);
     try {
-      // Update map center và marker cho interactive map với zoom animation
-      zoomToLocation(lat, lng, 16);
+      // Update map center và marker
+      setMapCenter([lat, lng]);
       setMarkerPosition([lat, lng]);
       
       // Get location info from coordinates
@@ -197,6 +141,14 @@ export function InteractiveMapSimple({
     }
   };
 
+  const handleMapClick = (lat: number, lng: number) => {
+    toast({
+      title: "Đã click trên bản đồ",
+      description: `Tọa độ: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+    });
+    handleLocationSelect(lat, lng);
+  };
+
   const fetchSuggestions = async (query: string) => {
     if (!query.trim() || query.length < 2) {
       setSuggestions([]);
@@ -206,7 +158,6 @@ export function InteractiveMapSimple({
 
     setIsLoadingSuggestions(true);
     try {
-      // Using Geoapify Autocomplete API with Vietnam bias
       const response = await fetch(
         `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
@@ -241,7 +192,6 @@ export function InteractiveMapSimple({
   const handleSearchInputChange = (value: string) => {
     setSearchAddress(value);
     
-    // Debounce suggestions fetch
     const timeoutId = setTimeout(() => {
       fetchSuggestions(value);
     }, 300);
@@ -262,62 +212,23 @@ export function InteractiveMapSimple({
   };
 
   const handleGetCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      toast({
-        title: "Lỗi",
-        description: "Trình duyệt không hỗ trợ định vị",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGettingLocation(true);
-    
-    toast({
-      title: "Đang lấy vị trí",
-      description: "Vui lòng cho phép truy cập vị trí...",
-    });
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setIsGettingLocation(false);
-        const { latitude, longitude } = position.coords;
-        
-        toast({
-          title: "Thành công",
-          description: `Đã lấy vị trí hiện tại: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        });
-        
-        handleLocationSelect(latitude, longitude);
-      },
-      (error) => {
-        setIsGettingLocation(false);
-        let errorMessage = "Không thể lấy vị trí hiện tại";
-        
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = "Người dùng từ chối cấp quyền truy cập vị trí";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = "Thông tin vị trí không khả dụng";
-            break;
-          case error.TIMEOUT:
-            errorMessage = "Hết thời gian chờ lấy vị trí";
-            break;
+    if (navigator.geolocation) {
+      setIsLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          handleLocationSelect(latitude, longitude);
+        },
+        (error) => {
+          setIsLoading(false);
+          toast({
+            title: "Lỗi",
+            description: "Không thể lấy vị trí hiện tại",
+            variant: "destructive",
+          });
         }
-        
-        toast({
-          title: "Lỗi",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000 // Cache for 5 minutes
-      }
-    );
+      );
+    }
   };
 
   const handleSearchLocation = async () => {
@@ -325,45 +236,28 @@ export function InteractiveMapSimple({
     
     setIsLoading(true);
     try {
-      // Using Geoapify Geocoding API
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchAddress)}&apiKey=${getGeoapifyApiKey()}`
+        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchAddress)}&lang=vi&limit=1&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
-        const { lat, lon } = feature.properties;
-        
-        const locationData: LocationData = {
-          latitude: lat,
-          longitude: lon,
-          address: feature.properties.formatted || searchAddress,
-        };
-        
-        setSelectedLocation(locationData);
-        zoomToLocation(lat, lon, 16);
-        setMarkerPosition([lat, lon]);
-        
-        if (onLocationSelect) {
-          onLocationSelect(locationData);
-        }
-        
-        toast({
-          title: "Tìm thấy địa chỉ",
-          description: feature.properties.formatted || searchAddress,
-        });
+        const lat = feature.properties.lat;
+        const lon = feature.properties.lon;
+        handleLocationSelect(lat, lon);
       } else {
         toast({
           title: "Không tìm thấy",
-          description: "Không thể tìm thấy địa chỉ này",
+          description: "Không tìm thấy địa chỉ này",
           variant: "destructive",
         });
       }
     } catch (error) {
+      console.error('Search error:', error);
       toast({
         title: "Lỗi",
-        description: "Không thể tìm kiếm địa chỉ",
+        description: "Lỗi khi tìm kiếm địa chỉ",
         variant: "destructive",
       });
     } finally {
@@ -374,7 +268,7 @@ export function InteractiveMapSimple({
   const handleValuation = async () => {
     if (!selectedLocation || !authToken) {
       toast({
-        title: "Lỗi",
+        title: "Thiếu thông tin",
         description: "Vui lòng chọn vị trí và cung cấp auth token",
         variant: "destructive",
       });
@@ -408,20 +302,16 @@ export function InteractiveMapSimple({
       if (data.success) {
         toast({
           title: "Định giá thành công",
-          description: "Kiểm tra kết quả bên dưới",
+          description: "Kết quả định giá đã được tạo",
         });
-        console.log('Valuation result:', data);
       } else {
-        toast({
-          title: "Lỗi định giá",
-          description: data.error || "Không thể thực hiện định giá",
-          variant: "destructive",
-        });
+        throw new Error(data.error || 'Valuation failed');
       }
     } catch (error) {
+      console.error('Valuation error:', error);
       toast({
-        title: "Lỗi",
-        description: "Không thể kết nối đến server",
+        title: "Lỗi định giá",
+        description: "Không thể thực hiện định giá",
         variant: "destructive",
       });
     } finally {
@@ -429,25 +319,15 @@ export function InteractiveMapSimple({
     }
   };
 
-
-
-  const handleInteractiveMapClick = (lat: number, lng: number) => {
-    toast({
-      title: "Đã click trên bản đồ",
-      description: `Tọa độ: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-    });
-    handleLocationSelect(lat, lng);
-  };
-
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MapPin className="h-5 w-5" />
-          Map Selector - Chọn vị trí định giá
+          Leaflet Interactive Map - Click để chọn vị trí
         </CardTitle>
         <CardDescription>
-          Click trực tiếp trên bản đồ Leaflet hoặc tìm kiếm địa chỉ để chọn vị trí định giá bất động sản
+          Click trực tiếp trên bản đồ hoặc tìm kiếm địa chỉ để chọn vị trí định giá bất động sản
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -540,19 +420,10 @@ export function InteractiveMapSimple({
                 onClick={handleGetCurrentLocation} 
                 variant="outline" 
                 size="sm"
-                disabled={isLoading || isGettingLocation}
+                disabled={isLoading}
               >
-                {isGettingLocation ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Đang lấy vị trí...
-                  </>
-                ) : (
-                  <>
-                    <Navigation className="h-4 w-4 mr-2" />
-                    Vị trí hiện tại
-                  </>
-                )}
+                <Navigation className="h-4 w-4 mr-2" />
+                Vị trí hiện tại
               </Button>
             </div>
           </div>
@@ -597,54 +468,48 @@ export function InteractiveMapSimple({
           </div>
         )}
 
-        {/* Interactive Map Display */}
-        <div className="aspect-video w-full overflow-hidden rounded-lg border">
-          <div className="w-full h-full">
-            {typeof window !== 'undefined' && (
-              <MapContainer
-                ref={mapRef}
-                center={mapCenter}
-                zoom={mapZoom}
-                style={{ height: '100%', width: '100%' }}
-                className="z-0"
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                
-                {/* Map events and click handler */}
-                <MapEvents onMapReady={handleMapReady} />
-                <MapClickHandler onMapClick={handleInteractiveMapClick} />
-                
-                {/* Marker hiển thị vị trí đã chọn */}
-                {markerPosition && (
-                  <Marker position={markerPosition}>
-                    <Popup>
-                      {selectedLocation ? (
-                        <div className="p-2">
-                          <p className="font-medium">Vị trí đã chọn</p>
-                          {selectedLocation.address && (
-                            <p className="text-sm text-gray-600">{selectedLocation.address}</p>
-                          )}
-                          <p className="text-xs text-gray-500">
-                            {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
-                          </p>
-                        </div>
-                      ) : (
-                        <p>Vị trí đã chọn</p>
+        {/* Leaflet Map */}
+        <div className="aspect-video w-full rounded-lg border overflow-hidden">
+          <MapContainer
+            center={mapCenter}
+            zoom={15}
+            style={{ height: '100%', width: '100%' }}
+            className="z-0"
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            
+            {/* Click handler */}
+            <MapClickHandler onMapClick={handleMapClick} />
+            
+            {/* Marker hiển thị vị trí đã chọn */}
+            {markerPosition && (
+              <Marker position={markerPosition} icon={customIcon}>
+                <Popup>
+                  {selectedLocation ? (
+                    <div className="p-2">
+                      <p className="font-medium">Vị trí đã chọn</p>
+                      {selectedLocation.address && (
+                        <p className="text-sm text-gray-600">{selectedLocation.address}</p>
                       )}
-                    </Popup>
-                  </Marker>
-                )}
-              </MapContainer>
+                      <p className="text-xs text-gray-500">
+                        {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p>Vị trí đã chọn</p>
+                  )}
+                </Popup>
+              </Marker>
             )}
-          </div>
+          </MapContainer>
         </div>
 
         <div className="text-sm text-gray-600">
-          💡 <strong>Hướng dẫn:</strong> 
-          Click trực tiếp trên bản đồ hoặc gõ địa chỉ và chọn từ gợi ý. Bản đồ sẽ tự động zoom vào vị trí đã chọn.
+          💡 <strong>Hướng dẫn:</strong> Click trực tiếp trên bản đồ để chọn vị trí, hoặc gõ địa chỉ và chọn từ gợi ý. 
+          Bạn cũng có thể sử dụng vị trí hiện tại.
         </div>
 
         {/* Quick Location Buttons */}
@@ -656,7 +521,6 @@ export function InteractiveMapSimple({
               setSearchAddress('Hoàn Kiếm, Hà Nội');
               handleLocationSelect(21.0285, 105.8542);
             }}
-            disabled={isLoading || isGettingLocation}
           >
             📍 Hoàn Kiếm, HN
           </Button>
@@ -667,7 +531,6 @@ export function InteractiveMapSimple({
               setSearchAddress('Quận 1, TP.HCM');
               handleLocationSelect(10.7769, 106.7009);
             }}
-            disabled={isLoading || isGettingLocation}
           >
             📍 Quận 1, HCM
           </Button>
@@ -678,7 +541,6 @@ export function InteractiveMapSimple({
               setSearchAddress('Đà Nẵng');
               handleLocationSelect(16.0471, 108.2068);
             }}
-            disabled={isLoading || isGettingLocation}
           >
             📍 Đà Nẵng
           </Button>

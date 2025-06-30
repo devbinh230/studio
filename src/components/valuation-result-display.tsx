@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
 import { 
   Home, 
   MapPin, 
@@ -14,7 +15,8 @@ import {
   Building,
   Ruler,
   Calendar,
-  Navigation
+  Navigation,
+  Target
 } from 'lucide-react';
 
 interface ValuationResultProps {
@@ -41,6 +43,27 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
 
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('vi-VN').format(value);
+  };
+
+  // Tính khoảng giá +/- 10%
+  const calculatePriceRange = (basePrice: number) => {
+    const minPrice = basePrice * 0.9; // -10%
+    const maxPrice = basePrice * 1.1; // +10%
+    return { minPrice, maxPrice, basePrice };
+  };
+
+  const formatPriceRange = (price: number) => {
+    const billions = Math.floor(price / 1000000000);
+    const millions = Math.floor((price % 1000000000) / 1000000);
+    
+    if (billions > 0) {
+      if (millions > 0) {
+        return `${billions} tỷ ${Math.round(millions / 100) * 100 / 1000} triệu`;
+      }
+      return `${billions} tỷ`;
+    } else {
+      return `${Math.round(millions / 100) * 100} triệu`;
+    }
   };
 
   const getPropertyType = (type: string) => {
@@ -136,6 +159,78 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Price Range Suggestion Card */}
+      {(() => {
+        const totalPriceRange = calculatePriceRange(result.totalPrice);
+        const housePriceRange = calculatePriceRange(result.housePrice);
+        
+        return (
+          <Card className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-blue-200">
+            <CardHeader>
+              <CardTitle className="text-xl font-bold text-center flex items-center justify-center gap-2">
+                <Target className="h-5 w-5 text-blue-600" />
+                💰 Gợi ý giá bán
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Single Price Range Slider */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-2xl font-bold text-green-600">
+                    {formatPriceRange(totalPriceRange.minPrice)}
+                  </span>
+                  <span className="text-2xl font-bold text-red-600">
+                    {formatPriceRange(totalPriceRange.maxPrice)}
+                  </span>
+                </div>
+                
+                {/* Price Range Slider */}
+                <div className="relative px-2">
+                  <div className="flex h-4 bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 rounded-full">
+                    <div className="w-1/2 relative">
+                      <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 text-xs font-medium text-center">
+                        <div className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+                          {formatPriceRange(totalPriceRange.basePrice)}
+                        </div>
+                        <div className="w-0 h-0 border-l-6 border-r-6 border-t-6 border-transparent border-t-blue-600 mx-auto"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Legend */}
+                <div className="flex justify-between text-sm text-gray-600 mt-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-green-400 rounded-full"></div>
+                    <span>Khoảng giá giúp bán nhanh hơn</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-red-400 rounded-full"></div>
+                    <span>Khoảng giá có thể chậm hơn đôi chút</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Suggestion Box */}
+              <div className="bg-white/70 rounded-lg p-4 border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <div className="bg-blue-100 p-2 rounded-full">
+                    <TrendingUp className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-800 mb-1">💡 Gợi ý từ AI</h4>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Giá trong khoảng <strong className="text-green-600">{formatPriceRange(totalPriceRange.minPrice)}</strong> đến <strong className="text-blue-600">{formatPriceRange(totalPriceRange.basePrice)}</strong> sẽ giúp bán nhanh hơn. 
+                      Giá từ <strong className="text-blue-600">{formatPriceRange(totalPriceRange.basePrice)}</strong> đến <strong className="text-red-600">{formatPriceRange(totalPriceRange.maxPrice)}</strong> có thể đạt được nhưng thời gian bán sẽ lâu hơn.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
