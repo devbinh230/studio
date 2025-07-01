@@ -20,9 +20,50 @@ export type SummaryDetails = {
   quality: { score: number; details: string };
 };
 
+// Real Estate types for comparable sales
+export type RealEstate = {
+  id: string;
+  title: string;
+  type: string;
+  area: number;
+  totalArea: number;
+  address: {
+    id: string;
+    createdDate: string;
+    modifiedDate: string;
+    type: string;
+    city: string;
+    district: string;
+    ward?: string;
+    street?: string;
+    administrativeLevel: number;
+    addressCode?: string;
+    name: string;
+    detail: string;
+  };
+  geoLocation: [number, number];
+  price: number;
+  totalPrice: number;
+  thumbnail: string;
+  isExternal: boolean;
+  saleStatus: string;
+  contentScore: number;
+  isExclusive: boolean;
+  distanceToStreet: number;
+  facadeNumber: number;
+  facadeWidth: number;
+  floorNumber: number;
+  basementNumber: number;
+  otherArea: number;
+  floorArea: number;
+  systemProduct: boolean;
+  tokenized: boolean;
+};
+
 // API Response types for new format
 export type ApiValuationResult = {
   valuation_result: {
+    realEstates?: RealEstate[];
     evaluation: {
       address: {
         type: string;
@@ -67,6 +108,11 @@ export type ApiValuationResult = {
       year: number;
     };
   };
+  utilities?: {
+    total: number;
+    data: Utility[];
+    groupedData: Record<UtilityType, Utility[]>;
+  };
   [key: string]: any;
 };
 
@@ -76,3 +122,29 @@ export type CombinedResult = {
   summary: SummaryResult;
   summaryDetails: SummaryDetails;
 } | ApiValuationResult;
+
+// Utilities API types for resta.vn
+export type UtilityType = 'hospital' | 'market' | 'restaurant' | 'cafe' | 'supermarket' | 'commercial_center';
+
+export type Utility = {
+  id: string;
+  type: UtilityType;
+  geoLocation: [number, number]; // [lng, lat]
+  name: string;
+  address: string;
+  dimension: number;
+  distance: number;
+};
+
+export type UtilitiesResponse = {
+  total: number;
+  data: Utility[];
+};
+
+export type UtilitiesParams = {
+  types: UtilityType[];
+  lat: number;
+  lng: number;
+  distance?: number; // in km, default 10
+  size?: number; // number of results per type, default 5
+};

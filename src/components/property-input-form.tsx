@@ -15,11 +15,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { getValuationAndSummary } from '@/app/actions';
 import type { CombinedResult } from '@/lib/types';
-import { Home, Loader2, Cpu, Globe, MapPin, X } from 'lucide-react';
+import { Home, Loader2, MapPin, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getDefaultAuthToken, getGeoapifyApiKey } from '@/lib/config';
 
@@ -65,7 +63,6 @@ export function PropertyInputForm({
   selectedLocation,
   onLocationSelect,
 }: PropertyInputFormProps) {
-  const [useRealApi, setUseRealApi] = useState(true); // Default to real API
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -195,70 +192,59 @@ export function PropertyInputForm({
     setResult(null);
 
     try {
-      if (useRealApi) {
-        // Use /api/complete-flow endpoint
-        if (!selectedLocation?.latitude || !selectedLocation?.longitude) {
-          setError('Vui lòng chọn vị trí trên bản đồ trước khi định giá.');
-          setIsLoading(false);
-          return;
-        }
+      // Use real API endpoint
+      if (!selectedLocation?.latitude || !selectedLocation?.longitude) {
+        setError('Vui lòng chọn vị trí trên bản đồ trước khi định giá.');
+        setIsLoading(false);
+        return;
+      }
 
-                                   const authToken = getDefaultAuthToken();
+      const authToken = getDefaultAuthToken();
 
-        const payload = {
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
-          property_details: {
-            type: 'town_house',
-            landArea: values.lotSize,
-            houseArea: values.size,
-            laneWidth: 10.0,
-            facadeWidth: 4.0,
-            storyNumber: 3.0,
-            bedRoom: values.bedrooms,
-            bathRoom: values.bathrooms,
-            legal: 'pink_book',
-          },
-          auth_token: authToken,
-        };
+      const payload = {
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        property_details: {
+          type: 'town_house',
+          landArea: values.lotSize,
+          houseArea: values.size,
+          laneWidth: 10.0,
+          facadeWidth: 4.0,
+          storyNumber: 3.0,
+          bedRoom: values.bedrooms,
+          bathRoom: values.bathrooms,
+          legal: 'pink_book',
+        },
+        auth_token: authToken,
+      };
 
-                 const response = await fetch('/api/complete-flow', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
+      const response = await fetch('/api/complete-flow', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-        const result = await response.json();
+      const result = await response.json();
 
-        if (result.success) {
-          setResult(result as CombinedResult);
-          
-          // Show notification if using mock data
-          if (result.error && result.error.includes('mock')) {
-            toast({
-              title: "⚠️ Thông báo",
-              description: "Đang sử dụng dữ liệu mẫu do vấn đề với API thực tế",
-              variant: "destructive",
-            });
-          }
-        } else {
-          setError(result.error || 'Định giá thất bại');
+      if (result.success) {
+        setResult(result as CombinedResult);
+        
+        // Show notification if using mock data
+        if (result.error && result.error.includes('mock')) {
+          toast({
+            title: "⚠️ Thông báo",
+            description: "Đang sử dụng dữ liệu mẫu do vấn đề với API thực tế",
+            variant: "destructive",
+          });
         }
       } else {
-        // Use AI mock data
-        const result = await getValuationAndSummary(values);
-
-        if (result.success) {
-          setResult(result.data);
-        } else {
-          setError(result.error);
-        }
+        setError(result.error || 'Định giá thất bại');
       }
     } catch (error) {
       setError('Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.');
@@ -269,46 +255,24 @@ export function PropertyInputForm({
   }
 
   return (
-    <Card>
+    <Card className="professional-card">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl flex items-center gap-2">
-          <Home className="h-6 w-6 text-primary" />
-          Thông tin Bất động sản
+        <CardTitle className="text-xl font-bold flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg shadow-sm">
+            <Home className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-slate-800">Thông tin Bất động sản</h3>
+            <p className="text-sm text-slate-600 font-normal">Chi tiết tài sản</p>
+          </div>
         </CardTitle>
         <CardDescription>
           {selectedLocation ? 
-            'Điền thông tin bất động sản cho vị trí đã chọn để nhận định giá.' :
-            'Chọn vị trí trên bản đồ và nhập thông tin bất động sản để nhận định giá.'
+            'Điền thông tin bất động sản cho vị trí đã chọn để nhận định giá chính xác.' :
+            'Chọn vị trí trên bản đồ và nhập thông tin bất động sản để nhận định giá chính xác từ API thực tế.'
           }
         </CardDescription>
-        <div className="flex items-center gap-4 pt-2">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="api-mode"
-              checked={useRealApi}
-              onCheckedChange={setUseRealApi}
-            />
-            <label htmlFor="api-mode" className="text-sm font-medium cursor-pointer">
-              {useRealApi ? (
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-green-600" />
-                  <span>API thực tế</span>
-                  <Badge variant="default" className="text-xs">
-                  Bytesel.com
-                  </Badge>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-blue-600" />
-                  <span>AI mô phỏng</span>
-                  <Badge variant="secondary" className="text-xs">
-                    Demo
-                  </Badge>
-                </div>
-              )}
-            </label>
-          </div>
-        </div>
+
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -330,13 +294,13 @@ export function PropertyInputForm({
                           handleAddressInputChange(e.target.value);
                         }}
                         onFocus={() => field.value.length > 1 && fetchSuggestions(field.value)}
-                        className={selectedLocation ? 'bg-green-50 border-green-200' : ''}
+                        className={selectedLocation ? 'bg-blue-50 border-blue-200 text-blue-900 placeholder:text-blue-600' : 'placeholder:text-slate-500'}
                       />
                       {field.value && (
                         <button
                           type="button"
                           onClick={clearAddressInput}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -346,12 +310,12 @@ export function PropertyInputForm({
                       {showSuggestions && (
                         <div 
                           ref={suggestionsRef}
-                          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto"
                         >
                           {isLoadingSuggestions ? (
-                            <div className="p-3 text-center text-gray-500">
-                              <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
-                              <span className="text-sm">Đang tìm kiếm...</span>
+                            <div className="p-4 text-center">
+                              <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 text-blue-500" />
+                              <span className="text-sm text-slate-600">Đang tìm kiếm...</span>
                             </div>
                           ) : suggestions.length > 0 ? (
                             <div className="py-1">
@@ -360,16 +324,16 @@ export function PropertyInputForm({
                                   key={suggestion.place_id || index}
                                   type="button"
                                   onClick={() => handleSuggestionClick(suggestion)}
-                                  className="w-full px-3 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none border-b border-gray-100 last:border-b-0"
+                                  className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-slate-100 last:border-b-0 transition-colors"
                                 >
-                                  <div className="flex items-start gap-2">
-                                    <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                                  <div className="flex items-start gap-3">
+                                    <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-gray-900 truncate">
+                                      <p className="text-sm font-medium text-slate-900 truncate">
                                         {suggestion.address_line1 || suggestion.formatted}
                                       </p>
                                       {suggestion.address_line2 && (
-                                        <p className="text-xs text-gray-500 truncate">
+                                        <p className="text-xs text-slate-600 truncate">
                                           {suggestion.address_line2}
                                         </p>
                                       )}
@@ -384,8 +348,8 @@ export function PropertyInputForm({
                               ))}
                             </div>
                           ) : (
-                            <div className="p-3 text-center text-gray-500">
-                              <span className="text-sm">Không tìm thấy kết quả</span>
+                            <div className="p-4 text-center">
+                              <span className="text-sm text-slate-600">Không tìm thấy kết quả</span>
                             </div>
                           )}
                         </div>
@@ -394,11 +358,11 @@ export function PropertyInputForm({
                   </FormControl>
                   <FormMessage />
                   {selectedLocation ? (
-                    <p className="text-xs text-green-600">
+                    <p className="text-xs text-blue-600 font-medium">
                       ✅ Địa chỉ được tự động điền từ vị trí đã chọn trên bản đồ
                     </p>
                   ) : (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-600">
                       💡 Gõ địa chỉ để xem gợi ý tự động
                     </p>
                   )}
@@ -465,25 +429,20 @@ export function PropertyInputForm({
           <CardFooter>
             <Button 
               type="submit" 
-              className="w-full bg-accent hover:bg-accent/90" 
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-lg" 
               disabled={form.formState.isSubmitting}
             >
               {form.formState.isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {useRealApi ? 'Đang định giá (API thực)...' : 'Đang định giá (AI)...'}
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />
+                  <span className="text-white">Đang định giá...</span>
                 </>
               ) : (
                 <>
-                  {useRealApi ? (
-                    <Globe className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Cpu className="mr-2 h-4 w-4" />
-                  )}
-                  {selectedLocation ? 
-                    (useRealApi ? 'Định giá thực tế tại vị trí này' : 'Định giá AI tại vị trí này') : 
-                    (useRealApi ? 'Định giá thực tế' : 'Định giá AI')
-                  }
+                  <Home className="mr-2 h-4 w-4 text-white" />
+                  <span className="text-white">
+                    {selectedLocation ? 'Định giá tại vị trí này' : 'Định giá bất động sản'}
+                  </span>
                 </>
               )}
             </Button>

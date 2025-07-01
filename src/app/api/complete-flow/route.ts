@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
       parsed_address: any;
       valuation_payload: any;
       valuation_result: any;
+      utilities: any;
       success: boolean;
       error: string | null;
     } = {
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
       parsed_address: null,
       valuation_payload: null,
       valuation_result: null,
+      utilities: null,
       success: false,
       error: null,
     };
@@ -269,6 +271,53 @@ export async function POST(request: NextRequest) {
       result.error = 'Using mock data due to API exception';
     }
 
+    // Step 5: Fetch utilities data đồng thời 
+    console.log('\n🏪 STEP 5: Fetching nearby utilities');
+    const [utilityLng, utilityLat] = payload.geoLocation || [105.8342, 21.0278];
+    
+    let utilitiesData = null;
+    try {
+      const utilityTypes = ['hospital', 'market', 'restaurant', 'cafe', 'supermarket', 'commercial_center'];
+      const typeString = utilityTypes.join(',');
+             const utilitiesUrl = `https://apis.resta.vn/erest-listing/map-utilities?type=${typeString}&lat=${utilityLat}&lng=${utilityLng}&_distance=5&_size=5`;
+      
+      console.log('🔗 Calling utilities API:', utilitiesUrl);
+      
+      const utilitiesResponse = await fetch(utilitiesUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'EstateValuate/1.0',
+        },
+      });
+
+      if (utilitiesResponse.ok) {
+        const utilitiesResult = await utilitiesResponse.json();
+        
+        // Group utilities by type
+        const groupedUtilities = utilityTypes.reduce((acc, type) => {
+          acc[type] = utilitiesResult.data?.filter((utility: any) => utility.type === type) || [];
+          return acc;
+        }, {} as Record<string, any[]>);
+
+        utilitiesData = {
+          total: utilitiesResult.total || 0,
+          data: utilitiesResult.data || [],
+          groupedData: groupedUtilities,
+        };
+        
+        console.log('✅ Utilities data fetched successfully!');
+        console.log(`   - Total utilities found: ${utilitiesData.total}`);
+      } else {
+        console.log('⚠️  Utilities API failed, continuing without utilities data');
+      }
+    } catch (utilitiesError) {
+      console.error('⚠️  Error fetching utilities:', utilitiesError);
+    }
+
+    // Add utilities to result
+    result.utilities = utilitiesData;
+
     console.log('\n🎉 VALUATION FLOW COMPLETED!');
     console.log('='.repeat(50));
 
@@ -277,6 +326,7 @@ export async function POST(request: NextRequest) {
     console.log(`🏘️  City: ${parsedAddress.city}`);
     console.log(`🏙️  District: ${parsedAddress.district}`);
     console.log(`🏡 Ward: ${parsedAddress.ward}`);
+    console.log(`🏪 Utilities found: ${utilitiesData?.total || 0}`);
     console.log('💰 Valuation result:', JSON.stringify(result.valuation_result, null, 2));
 
     return NextResponse.json(result);
