@@ -151,6 +151,7 @@ export default function Dashboard() {
                   onLocationSelect={handleLocationSelect}
                   showValuationButton={false}
                   initialLocation={{ lat: 21.0282993, lng: 105.8539963 }}
+                  selectedLocation={selectedLocation}
                 />
                 
                 {/* Getting Started Guide */}
