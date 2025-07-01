@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Helper function to format currency
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 // Generate mock valuation data when API fails
 function generateMockValuation(payload: any) {
   const basePricePerSqm = 65000000; // 65M VND per sqm (base price)
@@ -104,6 +113,8 @@ export async function POST(request: NextRequest) {
       valuation_payload: any;
       valuation_result: any;
       utilities: any;
+      price_trend: any;
+      ai_valuation: any;
       success: boolean;
       error: string | null;
     } = {
@@ -113,6 +124,8 @@ export async function POST(request: NextRequest) {
       valuation_payload: null,
       valuation_result: null,
       utilities: null,
+      price_trend: null,
+      ai_valuation: null,
       success: false,
       error: null,
     };
@@ -318,7 +331,150 @@ export async function POST(request: NextRequest) {
     // Add utilities to result
     result.utilities = utilitiesData;
 
-    console.log('\n🎉 VALUATION FLOW COMPLETED!');
+    // Step 6: Fetch price trend data
+    console.log('\n📈 STEP 6: Fetching price trend data');
+    let priceTrendData = null;
+    try {
+      // Map property type to API category
+      const mapPropertyTypeToCategory = (type: string): string => {
+        const categoryMap: Record<string, string> = {
+          'apartment': 'chung_cu',
+          'lane_house': 'nha_hem_ngo', 
+          'town_house': 'nha_mat_pho',
+          'land': 'ban_dat',
+          'villa': 'biet_thu_lien_ke'
+        };
+        return categoryMap[type] || 'nha_mat_pho';
+      };
+
+      const trendParams = new URLSearchParams({
+        city: parsedAddress.city,
+        district: parsedAddress.district,
+        category: mapPropertyTypeToCategory(mergedDetails.type || 'town_house')
+      });
+      
+      const trendUrl = `${request.nextUrl.origin}/api/price-trend?${trendParams}`;
+      console.log('🔗 Calling price trend API:', trendUrl);
+      
+      const trendResponse = await fetch(trendUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (trendResponse.ok) {
+        const trendResult = await trendResponse.json();
+        priceTrendData = {
+          success: trendResult.success,
+          data: trendResult.data,
+          source: trendResult.source,
+          error: trendResult.error || null
+        };
+        
+        console.log('✅ Price trend data fetched successfully!');
+        console.log(`   - Data points: ${trendResult.data?.length || 0}`);
+        console.log(`   - Source: ${trendResult.source}`);
+      } else {
+        console.log('⚠️  Price trend API failed, continuing without trend data');
+        priceTrendData = {
+          success: false,
+          error: `Trend API returned status ${trendResponse.status}`
+        };
+      }
+    } catch (trendError) {
+      console.error('⚠️  Error fetching price trend:', trendError);
+      priceTrendData = {
+        success: false,
+        error: `Error occurred: ${trendError}`
+      };
+    }
+
+    // Add price trend to result
+    result.price_trend = priceTrendData;
+
+    // Step 7: AI Property Valuation (Enhanced)
+    console.log('\n🤖 STEP 7: AI Property Valuation Enhancement');
+    let aiValuationData = null;
+    try {
+      // Prepare AI valuation input
+      const marketDataString = result.valuation_result?.evaluation ? 
+        `Khu vực: ${parsedAddress.formatted_address}. ` +
+        `Giá thị trường hiện tại: ${formatCurrency(result.valuation_result.evaluation.totalPrice)}. ` +
+        `Giá đất tham khảo: ${formatCurrency(result.valuation_result.evaluation.totalPrice / result.valuation_result.evaluation.landArea)}/m². ` +
+        `Các bất động sản cùng khu vực có giá từ ${formatCurrency(result.valuation_result.evaluation.totalPrice * 0.8)} đến ${formatCurrency(result.valuation_result.evaluation.totalPrice * 1.2)}.` :
+        `Khu vực: ${parsedAddress.formatted_address}. Dữ liệu thị trường đang được cập nhật.`;
+
+      const aiValuationInput = {
+        address: parsedAddress.formatted_address,
+        size: mergedDetails.houseArea || 45,
+        bedrooms: mergedDetails.bedRoom || 2,
+        bathrooms: mergedDetails.bathRoom || 2,
+        lotSize: mergedDetails.landArea || 45,
+        marketData: marketDataString
+      };
+
+      console.log('🔗 Calling AI property valuation with input:', JSON.stringify(aiValuationInput, null, 2));
+
+      const aiValuationUrl = `${request.nextUrl.origin}/api/property-valuation`;
+      const aiValuationResponse = await fetch(aiValuationUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiValuationInput),
+      });
+
+      if (aiValuationResponse.ok) {
+        const aiValuationResult = await aiValuationResponse.json();
+        aiValuationData = {
+          success: true,
+          data: aiValuationResult,
+          input: aiValuationInput
+        };
+        
+        console.log('✅ AI Property valuation completed successfully!');
+        console.log(`   - AI Low Value: ${formatCurrency(aiValuationResult.lowValue)}`);
+        console.log(`   - AI Reasonable Value: ${formatCurrency(aiValuationResult.reasonableValue)}`);
+        console.log(`   - AI High Value: ${formatCurrency(aiValuationResult.highValue)}`);
+        console.log(`   - AI House Price: ${formatCurrency(aiValuationResult.price_house)}`);
+
+        // Apply AI valuation to the main result
+        if (result.valuation_result?.evaluation) {
+          // Update the main evaluation with AI values
+          result.valuation_result.evaluation.totalPrice = aiValuationResult.reasonableValue;
+          result.valuation_result.evaluation.housePrice = aiValuationResult.price_house;
+          
+          // Add AI valuation range
+          result.valuation_result.evaluation.ai_valuation = {
+            lowValue: aiValuationResult.lowValue,
+            reasonableValue: aiValuationResult.reasonableValue,
+            highValue: aiValuationResult.highValue,
+            price_house: aiValuationResult.price_house,
+            source: 'AI_ENHANCED'
+          };
+          
+          console.log('✅ Applied AI valuation to main result');
+        }
+      } else {
+        console.log('⚠️  AI Property valuation API failed, continuing with existing data');
+        aiValuationData = {
+          success: false,
+          error: `AI Valuation API returned status ${aiValuationResponse.status}`
+        };
+      }
+    } catch (aiError) {
+      console.error('⚠️  Error in AI property valuation:', aiError);
+      aiValuationData = {
+        success: false,
+        error: `AI Valuation error: ${aiError}`
+      };
+    }
+
+    // Add AI valuation to result
+    result.ai_valuation = aiValuationData;
+
+    console.log('\n🎉 ENHANCED VALUATION FLOW COMPLETED!');
     console.log('='.repeat(50));
 
     // Print summary
@@ -327,6 +483,8 @@ export async function POST(request: NextRequest) {
     console.log(`🏙️  District: ${parsedAddress.district}`);
     console.log(`🏡 Ward: ${parsedAddress.ward}`);
     console.log(`🏪 Utilities found: ${utilitiesData?.total || 0}`);
+    console.log(`📈 Price trend data points: ${priceTrendData?.data?.length || 0}`);
+    console.log(`📊 Trend data source: ${priceTrendData?.source || 'none'}`);
     console.log('💰 Valuation result:', JSON.stringify(result.valuation_result, null, 2));
 
     return NextResponse.json(result);

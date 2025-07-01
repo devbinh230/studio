@@ -20,7 +20,7 @@ export function Header({ onNewSearch, showNewSearchButton = false }: HeaderProps
             </div>
             <div className="flex flex-col">
               <h1 className="text-xl font-bold logo-text leading-none">
-                EstateValuate
+                ByteselAI
               </h1>
               <p className="text-xs text-slate-500 leading-none">
                 AI Property Valuation

@@ -11,15 +11,16 @@ type RightPanelValuationProps = {
 
 const formatCurrency = (value: number) => {
   if (value >= 1000000000) {
-    return `${Math.round(value / 1000000000)} T ₫`;
+    const billions = Math.round(value / 1000000000);
+    return `${billions} đ`;
   } else if (value >= 1000000) {
-    return `${Math.round(value / 1000000)} Tr ₫`;
+    const millions = Math.round(value / 1000000);
+    return `${millions} đ`;
+  } else if (value >= 1000) {
+    const thousands = Math.round(value / 1000);
+    return `${thousands} đ`;
   }
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(value);
+  return `${Math.round(value)} đ`;
 };
 
 export function RightPanelValuation({ result }: RightPanelValuationProps) {
@@ -32,17 +33,26 @@ export function RightPanelValuation({ result }: RightPanelValuationProps) {
   // Check if it's API result or old format
   const isApiResult = 'valuation_result' in result;
   
-  const lowValue = isApiResult 
-    ? Math.round(result.valuation_result.evaluation.price * 0.85) // 85% of price
-    : result.valuation.lowValue;
+  // Use AI valuation data if available, otherwise fallback to original logic
+  const hasAIValuation = isApiResult && result.ai_valuation?.success && result.ai_valuation.data;
+  
+  const lowValue = hasAIValuation
+    ? result.ai_valuation.data.lowValue
+    : isApiResult 
+      ? Math.round(result.valuation_result.evaluation.totalPrice * 0.9) // 90% of total price
+      : result.valuation.lowValue;
     
-  const reasonableValue = isApiResult
-    ? result.valuation_result.evaluation.price
-    : result.valuation.reasonableValue;
+  const reasonableValue = hasAIValuation
+    ? result.ai_valuation.data.reasonableValue
+    : isApiResult
+      ? result.valuation_result.evaluation.totalPrice // Use total price as reasonable value
+      : result.valuation.reasonableValue;
     
-  const highValue = isApiResult
-    ? Math.round(result.valuation_result.evaluation.totalPrice)
-    : result.valuation.highValue;
+  const highValue = hasAIValuation
+    ? result.ai_valuation.data.highValue
+    : isApiResult
+      ? Math.round(result.valuation_result.evaluation.totalPrice * 1.1) // 110% of total price
+      : result.valuation.highValue;
 
   return (
     <Card className="professional-card bg-gradient-to-br from-emerald-50 via-white to-blue-50 border-emerald-200 shadow-lg hover:shadow-xl transition-all duration-300">
@@ -56,7 +66,9 @@ export function RightPanelValuation({ result }: RightPanelValuationProps) {
               <h3 className="text-lg font-bold text-slate-800">Định giá BĐS</h3>
               <Sparkles className="h-4 w-4 text-yellow-500" />
             </div>
-            <p className="text-sm text-slate-600 font-normal">Phân tích AI chuyên nghiệp</p>
+            <p className="text-sm text-slate-600 font-normal">
+              {hasAIValuation ? 'Phân tích AI chuyên nghiệp' : 'Phân tích thị trường'}
+            </p>
           </div>
         </CardTitle>
       </CardHeader>
@@ -82,7 +94,9 @@ export function RightPanelValuation({ result }: RightPanelValuationProps) {
             <p className="text-3xl font-black text-amber-700 tracking-tight">
               {isMounted ? formatCurrency(reasonableValue) : '...'}
             </p>
-            <p className="text-xs text-amber-600 font-semibold">Đề xuất AI</p>
+            <p className="text-xs text-amber-600 font-semibold">
+              {hasAIValuation ? 'Đề xuất AI' : 'Phù hợp nhất'}
+            </p>
           </div>
           
           <div className="flex flex-col items-center gap-2 px-3 py-4">

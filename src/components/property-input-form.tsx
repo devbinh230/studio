@@ -13,21 +13,68 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { CombinedResult } from '@/lib/types';
-import { Home, Loader2, MapPin, X } from 'lucide-react';
+import { 
+  Home, 
+  Loader2, 
+  MapPin, 
+  X, 
+  Building, 
+  Ruler, 
+  FileText, 
+  Layers,
+  Bath,
+  Bed,
+  Square,
+  TreeDeciduous
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getDefaultAuthToken, getGeoapifyApiKey } from '@/lib/config';
 
 const formSchema = z.object({
   address: z.string().min(5, 'Vui lòng nhập địa chỉ hợp lệ.'),
-  size: z.coerce.number().min(10, 'Diện tích phải lớn hơn 10m².'),
+  type: z.enum(['apartment', 'lane_house', 'town_house', 'villa', 'land', 'shop_house'], {
+    required_error: 'Vui lòng chọn loại bất động sản.',
+  }),
+  houseArea: z.coerce.number().min(10, 'Diện tích sàn phải lớn hơn 10m².'),
+  landArea: z.coerce.number().min(10, 'Diện tích đất phải lớn hơn 10m².'),
+  facadeWidth: z.coerce.number().min(1, 'Chiều rộng mặt tiền phải lớn hơn 1m.'),
+  laneWidth: z.coerce.number().min(1, 'Chiều rộng đường/hẻm phải lớn hơn 1m.'),
+  storyNumber: z.coerce.number().min(1, 'Phải có ít nhất 1 tầng.'),
   bedrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng ngủ.'),
   bathrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng tắm.'),
-  lotSize: z.coerce.number().min(10, 'Diện tích lô đất phải lớn hơn 10m².'),
+  legal: z.enum(['contract', 'white_book', 'pink_book', 'red_book'], {
+    required_error: 'Vui lòng chọn tình trạng pháp lý.',
+  }),
 });
+
+// Property type options with Vietnamese labels
+const propertyTypes = [
+  // { value: 'apartment', label: 'Chung cư', icon: Building },
+  { value: 'lane_house', label: 'Nhà trong hẻm', icon: Home },
+  { value: 'town_house', label: 'Nhà phố', icon: Building },
+  { value: 'villa', label: 'Biệt thự', icon: TreeDeciduous },
+  { value: 'land', label: 'Đất nền', icon: Square },
+  // { value: 'shop_house', label: 'Nhà mặt tiền', icon: Home },
+] as const;
+
+// Legal status options with Vietnamese labels
+const legalOptions = [
+  { value: 'red_book', label: 'Sổ đỏ' },
+  { value: 'pink_book', label: 'Sổ hồng' },
+  { value: 'white_book', label: 'Sổ trắng' },
+  { value: 'contract', label: 'Hợp đồng' },
+] as const;
 
 interface LocationData {
   latitude: number;
@@ -73,11 +120,16 @@ export function PropertyInputForm({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      address: '19 Nguyễn Hữu Cảnh, Phường 19, Bình Thạnh, TP. HCM',
-      size: 110,
+      address: '21°01\'41.9"N 105°51\'14.4"E, Phường Lý Thái Tổ, Quận Hoàn Kiếm, Hà Nội',
+      type: 'lane_house',
+      houseArea: 33,
+      landArea: 33,
+      facadeWidth: 3,
+      laneWidth: 3,
+      storyNumber: 4,
       bedrooms: 3,
       bathrooms: 2,
-      lotSize: 120,
+      legal: 'contract',
     },
   });
 
@@ -85,7 +137,6 @@ export function PropertyInputForm({
   useEffect(() => {
     if (selectedLocation?.address) {
       form.setValue('address', selectedLocation.address);
-      // Clear suggestions when auto-filling from map
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -118,7 +169,7 @@ export function PropertyInputForm({
     setIsLoadingSuggestions(true);
     try {
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
       const data = await response.json();
       
@@ -152,13 +203,11 @@ export function PropertyInputForm({
     form.setValue('address', suggestion.formatted);
     setShowSuggestions(false);
     
-    // Tạo LocationData từ suggestion và gọi onLocationSelect
     if (onLocationSelect) {
       const locationData: LocationData = {
         latitude: suggestion.lat,
         longitude: suggestion.lon,
         address: suggestion.formatted,
-        // Có thể parse thêm city, district, ward từ address nếu cần
       };
       onLocationSelect(locationData);
     }
@@ -172,7 +221,6 @@ export function PropertyInputForm({
   const handleAddressInputChange = (value: string) => {
     form.setValue('address', value);
     
-    // Debounce suggestions fetch
     const timeoutId = setTimeout(() => {
       fetchSuggestions(value);
     }, 300);
@@ -192,7 +240,6 @@ export function PropertyInputForm({
     setResult(null);
 
     try {
-      // Use real API endpoint
       if (!selectedLocation?.latitude || !selectedLocation?.longitude) {
         setError('Vui lòng chọn vị trí trên bản đồ trước khi định giá.');
         setIsLoading(false);
@@ -205,15 +252,15 @@ export function PropertyInputForm({
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
         property_details: {
-          type: 'town_house',
-          landArea: values.lotSize,
-          houseArea: values.size,
-          laneWidth: 10.0,
-          facadeWidth: 4.0,
-          storyNumber: 3.0,
+          type: values.type,
+          landArea: values.landArea,
+          houseArea: values.houseArea,
+          laneWidth: values.laneWidth,
+          facadeWidth: values.facadeWidth,
+          storyNumber: values.storyNumber,
           bedRoom: values.bedrooms,
           bathRoom: values.bathrooms,
-          legal: 'pink_book',
+          legal: values.legal,
         },
         auth_token: authToken,
       };
@@ -235,7 +282,6 @@ export function PropertyInputForm({
       if (result.success) {
         setResult(result as CombinedResult);
         
-        // Show notification if using mock data
         if (result.error && result.error.includes('mock')) {
           toast({
             title: "⚠️ Thông báo",
@@ -263,93 +309,73 @@ export function PropertyInputForm({
           </div>
           <div>
             <h3 className="text-slate-800">Thông tin Bất động sản</h3>
-            <p className="text-sm text-slate-600 font-normal">Chi tiết tài sản</p>
+            <p className="text-sm text-slate-600 font-normal">Chi tiết tài sản cần định giá</p>
           </div>
         </CardTitle>
-        <CardDescription>
-          {selectedLocation ? 
-            'Điền thông tin bất động sản cho vị trí đã chọn để nhận định giá chính xác.' :
-            'Chọn vị trí trên bản đồ và nhập thông tin bất động sản để nhận định giá chính xác từ API thực tế.'
-          }
-        </CardDescription>
-
       </CardHeader>
+      
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="space-y-4">
+            {/* Address Field */}
             <FormField
               control={form.control}
               name="address"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Địa chỉ</FormLabel>
+                  <FormLabel className="text-sm font-medium">Địa chỉ</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input 
                         ref={addressInputRef}
-                        placeholder="Nhập địa chỉ (VD: Hoàn Kiếm, Hà Nội)..." 
+                        placeholder="Nhập địa chỉ..." 
                         value={field.value}
                         onChange={(e) => {
                           field.onChange(e);
                           handleAddressInputChange(e.target.value);
                         }}
                         onFocus={() => field.value.length > 1 && fetchSuggestions(field.value)}
-                        className={selectedLocation ? 'bg-blue-50 border-blue-200 text-blue-900 placeholder:text-blue-600' : 'placeholder:text-slate-500'}
+                        className="pr-8"
                       />
                       {field.value && (
                         <button
                           type="button"
                           onClick={clearAddressInput}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                         >
                           <X className="h-4 w-4" />
                         </button>
                       )}
                       
-                      {/* Search Suggestions Dropdown */}
+                      {/* Suggestions Dropdown */}
                       {showSuggestions && (
                         <div 
                           ref={suggestionsRef}
-                          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                          className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto"
                         >
                           {isLoadingSuggestions ? (
-                            <div className="p-4 text-center">
-                              <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2 text-blue-500" />
-                              <span className="text-sm text-slate-600">Đang tìm kiếm...</span>
+                            <div className="p-3 text-center">
+                              <Loader2 className="h-4 w-4 animate-spin mx-auto text-blue-500" />
                             </div>
                           ) : suggestions.length > 0 ? (
-                            <div className="py-1">
+                            <div>
                               {suggestions.map((suggestion, index) => (
                                 <button
                                   key={suggestion.place_id || index}
                                   type="button"
                                   onClick={() => handleSuggestionClick(suggestion)}
-                                  className="w-full px-4 py-3 text-left hover:bg-blue-50 focus:bg-blue-50 focus:outline-none border-b border-slate-100 last:border-b-0 transition-colors"
+                                  className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b last:border-b-0 text-sm"
                                 >
-                                  <div className="flex items-start gap-3">
-                                    <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-slate-900 truncate">
-                                        {suggestion.address_line1 || suggestion.formatted}
-                                      </p>
-                                      {suggestion.address_line2 && (
-                                        <p className="text-xs text-slate-600 truncate">
-                                          {suggestion.address_line2}
-                                        </p>
-                                      )}
-                                      {suggestion.category && (
-                                        <Badge variant="outline" className="text-xs mt-1">
-                                          {suggestion.category}
-                                        </Badge>
-                                      )}
-                                    </div>
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="h-3 w-3 text-blue-500 flex-shrink-0" />
+                                    <span className="truncate">{suggestion.formatted}</span>
                                   </div>
                                 </button>
                               ))}
                             </div>
                           ) : (
-                            <div className="p-4 text-center">
-                              <span className="text-sm text-slate-600">Không tìm thấy kết quả</span>
+                            <div className="p-3 text-center text-sm text-gray-500">
+                              Không tìm thấy kết quả
                             </div>
                           )}
                         </div>
@@ -357,68 +383,172 @@ export function PropertyInputForm({
                     </div>
                   </FormControl>
                   <FormMessage />
-                  {selectedLocation ? (
-                    <p className="text-xs text-blue-600 font-medium">
-                      ✅ Địa chỉ được tự động điền từ vị trí đã chọn trên bản đồ
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-600">
-                      💡 Gõ địa chỉ để xem gợi ý tự động
-                    </p>
-                  )}
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
+
+            {/* Type & Legal */}
+            <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="size"
+                name="type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Diện tích (m²)</FormLabel>
+                    <FormLabel className="text-sm font-medium">Loại bất động sản</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Chọn loại" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {propertyTypes.map((type) => {
+                          const IconComponent = type.icon;
+                          return (
+                            <SelectItem key={type.value} value={type.value}>
+                              <div className="flex items-center gap-2">
+                                <IconComponent className="h-4 w-4" />
+                                <span>{type.label}</span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="legal"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Pháp lý</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Chọn pháp lý" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {legalOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Areas */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="landArea"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Diện tích đất (m²)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="100" {...field} />
+                      <Input type="number" placeholder="33" {...field} className="h-10" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
-                name="lotSize"
+                name="houseArea"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Diện tích đất (m²)</FormLabel>
+                    <FormLabel className="text-sm font-medium">Diện tích sàn (m²)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="120" {...field} />
+                      <Input type="number" placeholder="33" {...field} className="h-10" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+
+            {/* Dimensions */}
+            <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="bedrooms"
+                name="facadeWidth"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phòng ngủ</FormLabel>
+                    <FormLabel className="text-sm font-medium">Mặt tiền (m)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="3" {...field} />
+                      <Input type="number" step="0.1" placeholder="3.0" {...field} className="h-10" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="laneWidth"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Đường/hẻm (m)</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.1" placeholder="3.0" {...field} className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Rooms & Stories */}
+            <div className="grid grid-cols-3 gap-3">
+              <FormField
+                control={form.control}
+                name="storyNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Số tầng</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="4" {...field} className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="bedrooms"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Phòng ngủ</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="3" {...field} className="h-10" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="bathrooms"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phòng tắm</FormLabel>
+                    <FormLabel className="text-sm font-medium">Phòng tắm</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="2" {...field} />
+                      <Input type="number" placeholder="2" {...field} className="h-10" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -426,7 +556,8 @@ export function PropertyInputForm({
               />
             </div>
           </CardContent>
-          <CardFooter>
+          
+          <CardFooter className="pt-4">
             <Button 
               type="submit" 
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 ease-in-out disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none disabled:hover:shadow-lg" 
@@ -440,9 +571,7 @@ export function PropertyInputForm({
               ) : (
                 <>
                   <Home className="mr-2 h-4 w-4 text-white" />
-                  <span className="text-white">
-                    {selectedLocation ? 'Định giá tại vị trí này' : 'Định giá bất động sản'}
-                  </span>
+                  <span className="text-white">Định giá bất động sản</span>
                 </>
               )}
             </Button>

@@ -8,10 +8,19 @@ import { config } from '@/lib/config';
 
 const propertyInputSchema = z.object({
   address: z.string().min(5, 'Vui lòng nhập địa chỉ hợp lệ.'),
-  size: z.coerce.number().min(10, 'Diện tích phải lớn hơn 10m².'),
+  type: z.enum(['apartment', 'lane_house', 'town_house', 'villa', 'land', 'shop_house'], {
+    required_error: 'Vui lòng chọn loại bất động sản.',
+  }),
+  houseArea: z.coerce.number().min(10, 'Diện tích sàn phải lớn hơn 10m².'),
+  landArea: z.coerce.number().min(10, 'Diện tích đất phải lớn hơn 10m².'),
+  facadeWidth: z.coerce.number().min(1, 'Chiều rộng mặt tiền phải lớn hơn 1m.'),
+  laneWidth: z.coerce.number().min(1, 'Chiều rộng đường/hẻm phải lớn hơn 1m.'),
+  storyNumber: z.coerce.number().min(1, 'Phải có ít nhất 1 tầng.'),
   bedrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng ngủ.'),
   bathrooms: z.coerce.number().min(1, 'Phải có ít nhất 1 phòng tắm.'),
-  lotSize: z.coerce.number().min(10, 'Diện tích lô đất phải lớn hơn 10m².'),
+  legal: z.enum(['contract', 'white_book', 'pink_book', 'red_book'], {
+    required_error: 'Vui lòng chọn tình trạng pháp lý.',
+  }),
 });
 
 // Generate mock valuation data when API fails
@@ -158,15 +167,15 @@ export async function getRealApiValuation(
 
     // Step 3: Create valuation payload
     const propertyDetails = {
-      type: 'town_house',
-      landArea: validatedFields.data.lotSize,
-      houseArea: validatedFields.data.size,
+      type: validatedFields.data.type,
+      landArea: validatedFields.data.landArea,
+      houseArea: validatedFields.data.houseArea,
       bedRoom: validatedFields.data.bedrooms,
       bathRoom: validatedFields.data.bathrooms,
-      storyNumber: 3,
-      facadeWidth: 4,
-      laneWidth: 10,
-      legal: 'pink_book',
+      storyNumber: validatedFields.data.storyNumber,
+      facadeWidth: validatedFields.data.facadeWidth,
+      laneWidth: validatedFields.data.laneWidth,
+      legal: validatedFields.data.legal,
       hasGarden: false,
       year: new Date().getFullYear()
     };
@@ -200,7 +209,7 @@ export async function getRealApiValuation(
     result.valuation_payload = payload;
 
     // Step 4: Perform valuation
-    const authToken = config.resta.authTokenLegacy;
+    const authToken = config.resta.authToken;
     
     try {
       const valuationUrl = 'https://apis.resta.vn/erest-listing/real-estate-evaluations';
@@ -278,7 +287,11 @@ export async function getValuationAndSummary(
       'Thị trường địa phương đang có nhu cầu cao, các bất động sản đang được bán cao hơn 5-10% so với giá yêu cầu. Các dự án hạ tầng gần đây, bao gồm một trạm tàu điện mới, đã làm tăng giá trị bất động sản trong 6 tháng qua. Đơn giá trung bình mỗi mét vuông là 65 triệu đồng.';
 
     const valuationPromise = propertyValuationRange({
-      ...validatedFields.data,
+      address: validatedFields.data.address,
+      size: validatedFields.data.houseArea, // Map houseArea to size for AI flow compatibility
+      bedrooms: validatedFields.data.bedrooms,
+      bathrooms: validatedFields.data.bathrooms,
+      lotSize: validatedFields.data.landArea, // Map landArea to lotSize for AI flow compatibility
       marketData,
     });
 

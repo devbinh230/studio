@@ -87,7 +87,7 @@ const prompt = ai.definePrompt({
      - Nêu rõ ưu điểm (ví dụ: vị trí gần trung tâm, nhiều phòng ngủ/tắm) và nhược điểm (ví dụ: khu vực ít phát triển, giả định nhà cũ).
   
   Kết quả trả về:
-  Trả về JSON với các mức giá (đơn vị: tỷ đồng, làm tròn đến 9 chữ số thập phân):
+  Trả về JSON với các mức giá :
   - lowValue: Giá bán nhanh
   - reasonableValue: Giá tham khảo phù hợp nhất
   - highValue: Giá cao nhất có thể đạt được cho bất động sản.

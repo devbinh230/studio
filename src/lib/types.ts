@@ -6,10 +6,15 @@ export type SummaryResult = Awaited<ReturnType<typeof propertySummary>>;
 
 export type PropertyInputSchema = {
   address: string;
-  size: number;
+  type: 'apartment' | 'lane_house' | 'town_house' | 'villa' | 'land' | 'shop_house';
+  houseArea: number;
+  landArea: number;
+  facadeWidth: number;
+  laneWidth: number;
+  storyNumber: number;
   bedrooms: number;
   bathrooms: number;
-  lotSize: number;
+  legal: 'contract' | 'white_book' | 'pink_book' | 'red_book';
 };
 
 export type SummaryDetails = {

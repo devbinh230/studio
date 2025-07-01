@@ -21,9 +21,14 @@ import {
   Layers,
   Move,
   Car,
-  Shield
+  Shield,
+  FileCheck,
+  Users,
+  Heart,
+  Lightbulb
 } from 'lucide-react';
 import { UtilitiesInteractiveMap } from '@/components/utilities-interactive-map';
+import { PriceTrendChart } from '@/components/price-trend-chart';
 
 interface ValuationResultProps {
   data: any;
@@ -101,6 +106,41 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     return cities[city] || city.replace('_', ' ');
   };
 
+  // Function to get appropriate icon for AI analysis descriptions
+  const getAnalysisIcon = (description: string, index: number) => {
+    const desc = description.toLowerCase();
+    
+    // Check for location/position related content
+    if (desc.includes('vị trí') || desc.includes('tiện ích') || desc.includes('trường học') || desc.includes('bệnh viện') || desc.includes('trung tâm')) {
+      return <MapPin className="h-4 w-4 text-blue-600" />;
+    }
+    
+    // Check for legal/contract related content
+    if (desc.includes('hợp đồng') || desc.includes('pháp lý') || desc.includes('sổ') || desc.includes('đảm bảo') || desc.includes('minh bạch')) {
+      return <FileCheck className="h-4 w-4 text-green-600" />;
+    }
+    
+    // Check for family/living related content
+    if (desc.includes('gia đình') || desc.includes('phòng ngủ') || desc.includes('phòng tắm') || desc.includes('sinh hoạt') || desc.includes('phù hợp')) {
+      return <Users className="h-4 w-4 text-purple-600" />;
+    }
+    
+    // Check for investment/financial related content
+    if (desc.includes('đầu tư') || desc.includes('thanh khoản') || desc.includes('sinh lời') || desc.includes('giá') || desc.includes('thời gian')) {
+      return <TrendingUp className="h-4 w-4 text-amber-600" />;
+    }
+    
+    // Default icons based on index if no keywords match
+    const defaultIcons = [
+      <MapPin className="h-4 w-4 text-blue-600" />,
+      <FileCheck className="h-4 w-4 text-green-600" />,
+      <Users className="h-4 w-4 text-purple-600" />,
+      <Lightbulb className="h-4 w-4 text-orange-600" />
+    ];
+    
+    return defaultIcons[index % defaultIcons.length];
+  };
+
   return (
     <div className="space-y-6">
       {/* Mock Data Warning */}
@@ -156,69 +196,153 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
             </div>
           </div>
 
+          {/* AI Valuation Range Display */}
+          {data.ai_valuation?.success && data.ai_valuation.data && (
+            <div className="mt-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center justify-center w-6 h-6 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full">
+                  <span className="text-white text-xs font-bold">AI</span>
+                </div>
+                <h4 className="text-sm font-semibold text-indigo-900">Định giá nâng cao bởi AI</h4>
+                <Badge variant="outline" className="text-xs bg-indigo-100 text-indigo-700 border-indigo-300">
+                  AI_ENHANCED
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-100">
+                  <p className="text-xs text-slate-600 mb-1">Giá thấp nhất</p>
+                  <p className="text-sm font-bold text-emerald-600">
+                    {formatCurrency(data.ai_valuation.data.lowValue)}
+                  </p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border-2 border-indigo-300">
+                  <p className="text-xs text-slate-600 mb-1">Giá hợp lý</p>
+                  <p className="text-sm font-bold text-indigo-600">
+                    {formatCurrency(data.ai_valuation.data.reasonableValue)}
+                  </p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-indigo-100">
+                  <p className="text-xs text-slate-600 mb-1">Giá cao nhất</p>
+                  <p className="text-sm font-bold text-amber-600">
+                    {formatCurrency(data.ai_valuation.data.highValue)}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-3 text-xs text-indigo-700 text-center">
+                <span>AI đã phân tích dữ liệu thị trường và đưa ra khoảng giá phù hợp nhất</span>
+              </div>
+            </div>
+          )}
 
         </CardContent>
       </Card>
 
-      {/* Gợi ý giá bán - Phần đẹp giữ lại */}
+      {/* Gợi ý giá bán - Sử dụng AI Valuation nếu có */}
       {(() => {
-        const totalPriceRange = calculatePriceRange(result.totalPrice);
+        // Use AI valuation range if available, otherwise fallback to calculated range
+        const priceRange = (data.ai_valuation?.success && data.ai_valuation.data) ? {
+          minPrice: data.ai_valuation.data.lowValue,
+          basePrice: data.ai_valuation.data.reasonableValue,
+          maxPrice: data.ai_valuation.data.highValue
+        } : calculatePriceRange(result.totalPrice);
+        
+        const isAIEnhanced = data.ai_valuation?.success && data.ai_valuation.data;
         
         return (
-          <Card className="professional-card bg-gradient-to-br from-slate-900 to-blue-900 text-white">
+          <Card className={`professional-card ${isAIEnhanced ? 'bg-gradient-to-br from-indigo-900 to-purple-900' : 'bg-gradient-to-br from-slate-900 to-blue-900'} text-white`}>
             <CardContent className="p-8">
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex items-center justify-center w-8 h-8 bg-white/20 rounded-lg">
-                  <Target className="h-4 w-4 text-white" />
+                  {isAIEnhanced ? (
+                    <span className="text-white text-xs font-bold">AI</span>
+                  ) : (
+                    <Target className="h-4 w-4 text-white" />
+                  )}
                 </div>
-                <h3 className="text-xl font-bold text-white">Gợi ý giá bán</h3>
+                <div>
+                  <h3 className="text-xl font-bold text-white">
+                    {isAIEnhanced ? 'Gợi ý giá bán từ AI' : 'Gợi ý giá bán'}
+                  </h3>
+                  {isAIEnhanced && (
+                    <p className="text-xs text-white/70">Được phân tích bởi trí tuệ nhân tạo</p>
+                  )}
+                </div>
               </div>
 
                 {/* Price Range Labels */}
                 <div className="flex justify-between items-center mb-4">
                   <div className="text-center">
                     <p className="text-lg font-bold text-white">
-                      {formatPriceRange(totalPriceRange.minPrice)}
+                      {formatPriceRange(priceRange.minPrice)}
+                    </p>
+                    <p className="text-xs text-white/70 mt-1">
+                      {isAIEnhanced ? 'Bán nhanh' : 'Giá thấp'}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-lg font-bold text-white">
-                      {formatPriceRange(totalPriceRange.maxPrice)}
+                      {formatPriceRange(priceRange.maxPrice)}
+                    </p>
+                    <p className="text-xs text-white/70 mt-1">
+                      {isAIEnhanced ? 'Tối ưu lợi nhuận' : 'Giá cao'}
                     </p>
                   </div>
                 </div>
 
-                                 {/* Price Range Bar */}
-                 <div className="relative mb-4">
-                   <div className="h-3 bg-gradient-to-r from-emerald-400/60 to-red-400/60 rounded-full">
-                   </div>
-                   {/* Center point indicator */}
-                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                     <div className="w-4 h-4 bg-white rounded-full border-2 border-slate-900 shadow-lg"></div>
-                   </div>
-                   {/* Center price label */}
-                   <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
-                     <div className="bg-white text-slate-900 px-3 py-1 rounded-lg text-sm font-semibold shadow-lg whitespace-nowrap">
-                       {formatPriceRange(totalPriceRange.basePrice)}
-                     </div>
-                   </div>
-                 </div>
-                 
-                                  {/* Legend */}
-                 <div className="space-y-2 mt-4">
+                {/* Price Range Bar */}
+                <div className="relative mb-4">
+                  <div className={`h-3 ${isAIEnhanced ? 'bg-gradient-to-r from-emerald-400/60 via-indigo-400/60 to-amber-400/60' : 'bg-gradient-to-r from-emerald-400/60 to-red-400/60'} rounded-full`}>
+                  </div>
+                  {/* Center point indicator */}
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                    <div className={`w-4 h-4 ${isAIEnhanced ? 'bg-indigo-300' : 'bg-white'} rounded-full border-2 border-slate-900 shadow-lg`}></div>
+                  </div>
+                  {/* Center price label */}
+                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2">
+                    <div className={`${isAIEnhanced ? 'bg-indigo-100 text-indigo-900' : 'bg-white text-slate-900'} px-3 py-1 rounded-lg text-sm font-semibold shadow-lg whitespace-nowrap`}>
+                      {formatPriceRange(priceRange.basePrice)}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Legend */}
+                <div className="space-y-2 mt-4">
                   <div className="flex items-center gap-3">
                     <div className="w-4 h-4 bg-emerald-400 rounded-full"></div>
-                    <span className="text-sm text-white/90">Khoảng giá giúp bạn bán nhanh hơn</span>
+                    <span className="text-sm text-white/90">
+                      {isAIEnhanced ? 'Giá bán nhanh - thanh khoản cao' : 'Khoảng giá giúp bạn bán nhanh hơn'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 bg-red-400 rounded-full"></div>
-                    <span className="text-sm text-white/90">Khoảng giá giúp bạn bán với giá tốt nhất nhưng có thể sẽ chậm hơn đôi chút</span>
+                    <div className={`w-4 h-4 ${isAIEnhanced ? 'bg-amber-400' : 'bg-red-400'} rounded-full`}></div>
+                    <span className="text-sm text-white/90">
+                      {isAIEnhanced ? 'Giá tối ưu lợi nhuận - có thể bán chậm hơn' : 'Khoảng giá giúp bạn bán với giá tốt nhất nhưng có thể sẽ chậm hơn đôi chút'}
+                    </span>
                   </div>
+                  {isAIEnhanced && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 bg-indigo-400 rounded-full"></div>
+                      <span className="text-sm text-white/90">Giá hợp lý nhất được AI đề xuất</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
         );
       })()}
+
+      {/* Price Trend Chart - Thêm sau gợi ý giá bán */}
+      {data.price_trend && (
+        <PriceTrendChart 
+          city={address.city}
+          district={address.district}
+          category={result.type || 'town_house'}
+          data={data.price_trend.success ? data.price_trend.data : undefined}
+          className="mb-6"
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="professional-card">
@@ -342,8 +466,13 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
           <CardContent>
             <div className="space-y-3">
               {radarScore.descriptions.map((desc: string, index: number) => (
-                <div key={index} className="p-3 bg-gray-50 rounded-lg border-l-4 border-primary">
-                  <p className="text-sm text-gray-700 leading-relaxed">{desc}</p>
+                <div key={index} className="p-4 bg-gray-50 rounded-lg border-l-4 border-primary hover:bg-gray-100 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 bg-white rounded-lg shadow-sm border border-gray-200 flex-shrink-0 mt-0.5">
+                      {getAnalysisIcon(desc, index)}
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed flex-1">{desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -443,4 +572,4 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
       </Card>
     </div>
   );
-} 
+}

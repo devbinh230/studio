@@ -79,6 +79,8 @@
   
   .professional-card {
     @apply bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200;
+    backdrop-filter: blur(10px);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
   }
   
   .logo-text {
@@ -86,5 +88,128 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  /* Professional Form Styling */
+  .form-section-header {
+    @apply flex items-center gap-2 text-slate-700 font-medium text-sm mb-4 pb-2 border-b border-slate-100;
+  }
+
+  .form-section-header svg {
+    @apply text-blue-600;
+  }
+
+  /* Enhanced Input Styling */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
+  /* Focus states with better accessibility */
+  .form-field-focus {
+    @apply focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 focus-within:border-blue-500 transition-all duration-200;
+  }
+
+  /* Professional gradient button */
+  .professional-button {
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    transition: all 0.2s ease-in-out;
+  }
+
+  .professional-button:hover {
+    background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .professional-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  }
+
+  /* Select dropdown styling */
+  .select-content {
+    @apply bg-white border border-slate-200 shadow-lg rounded-lg;
+    backdrop-filter: blur(10px);
+  }
+
+  .select-item {
+    @apply hover:bg-blue-50 focus:bg-blue-50 transition-colors duration-150;
+  }
+
+  /* Suggestion dropdown improvements */
+  .suggestions-dropdown {
+    @apply bg-white/95 backdrop-blur-sm border border-slate-200 shadow-xl rounded-lg;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Animation for form sections */
+  .form-section {
+    animation: slideInUp 0.3s ease-out;
+  }
+
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Professional separator */
+  .form-separator {
+    @apply border-t border-slate-200 my-6;
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
+    height: 1px;
+    border: none;
+  }
+
+  /* Input group styling */
+  .input-group {
+    @apply space-y-2;
+  }
+
+  .input-group label {
+    @apply text-sm font-medium text-slate-700 flex items-center gap-2;
+  }
+
+  .input-group input,
+  .input-group .select-trigger {
+    @apply transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 focus:border-blue-500;
+  }
+
+  /* Icon styling in form */
+  .form-icon {
+    @apply text-slate-600;
+  }
+
+  /* Badge styling for legal options */
+  .legal-badge {
+    @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium;
+  }
+
+  .legal-badge.red-book {
+    @apply bg-red-50 text-red-700 border border-red-200;
+  }
+
+  .legal-badge.pink-book {
+    @apply bg-pink-50 text-pink-700 border border-pink-200;
+  }
+
+  .legal-badge.white-book {
+    @apply bg-gray-50 text-gray-700 border border-gray-200;
+  }
+
+  .legal-badge.contract {
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
   }
 }

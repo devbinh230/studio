@@ -10,11 +10,16 @@ import { ComparableSales } from '@/components/comparable-sales';
 export default async function DemoPage() {
   // Mock data for the demo page, as if it was submitted through the form
   const mockPropertyInput = {
-    address: '19 Nguyễn Hữu Cảnh, Phường 19, Bình Thạnh, Thành phố Hồ Chí Minh',
-    size: 110,
+    address: '21°01\'41.9"N 105°51\'14.4"E, Phường Lý Thái Tổ, Quận Hoàn Kiếm, Hà Nội',
+    type: 'lane_house' as const,
+    houseArea: 33,
+    landArea: 33,
+    facadeWidth: 3,
+    laneWidth: 3,
+    storyNumber: 4,
     bedrooms: 3,
     bathrooms: 2,
-    lotSize: 120,
+    legal: 'contract' as const,
   };
 
   const result = await getValuationAndSummary(mockPropertyInput);
