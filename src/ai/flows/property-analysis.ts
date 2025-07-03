@@ -23,6 +23,8 @@ const PropertyAnalysisInputSchema = z.object({
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
   laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
   facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
+  bedrooms: z.number().describe('Số phòng ngủ.').optional(),
+  bathrooms: z.number().describe('Số phòng tắm.').optional(),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).'),
   storyNumber: z.number().describe('Số tầng của bất động sản.'),
   legal: z.string().describe('Tình trạng pháp lý (sổ đỏ, hợp đồng, v.v.).'),
@@ -57,13 +59,16 @@ const prompt = ai.definePrompt({
 **Thông tin từ input:**
 - Loại: {{{type}}}
 - Địa chỉ: {{{address}}}
-- Đất/Nhà: {{{landArea}}}m² / {{{houseArea}}}m²
-- Lộ giới/Mặt tiền: {{{laneWidth}}}m / {{{facadeWidth}}}m
-- Tầng: {{{storyNumber}}} | Phòng: {{{bedrooms}}}N-{{{bathrooms}}}T
+- Diện tích: Đất {{{landArea}}}m² / Sàn {{{houseArea}}}m² / Lô {{{lotSize}}}m² / Sử dụng {{{size}}}m²
+- Kích thước: Lộ giới {{{laneWidth}}}m / Mặt tiền {{{facadeWidth}}}m
+- Thiết kế: {{{storyNumber}}} tầng | {{{bedrooms}}} phòng ngủ | {{{bathrooms}}} phòng tắm
 - Pháp lý: {{{legal}}}
 - Năm xây dựng: {{{yearBuilt}}}
-- Thị trường: {{{marketData}}}
+- Tiện ích: {{{amenities}}}
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})
+
+**Dữ liệu thị trường:**
+{{{marketData}}}
 
 **Dữ liệu search được:**
 {{{searchData}}}

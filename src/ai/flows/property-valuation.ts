@@ -19,10 +19,17 @@ const PropertyValuationRangeInputSchema = z.object({
   administrativeLevel: z.number().describe('Cấp hành chính.'),
   type: z.string().describe('Loại bất động sản (ví dụ: lane_house, NORMAL, v.v.).'),
   size: z.number().describe('Diện tích sàn (m²).'),
+  lotSize: z.number().describe('Diện tích lô đất (m²).'),
+
+
+  
+  landArea: z.number().describe('Diện tích đất (m²).'),
+  houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
+  laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
+  facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
   storyNumber: z.number().describe('Số tầng.').optional(),
   bedrooms: z.number().describe('Số phòng ngủ.').optional(),
   bathrooms: z.number().describe('Số phòng tắm.').optional(),
-  lotSize: z.number().describe('Diện tích lô đất (m²).'),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).'),
   yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
@@ -48,22 +55,22 @@ const prompt = ai.definePrompt({
   output: {schema: PropertyValuationRangeOutputSchema},
   prompt: `NHIỆM VỤ: TÍNH TOÁN KHOẢNG GIÁ BẤT ĐỘNG SẢN, kết quả trả ra ngắn gọn không dài dòng, chỉ thực hiện các phép toán
 — **THÔNG TIN BẤT ĐỘNG SẢN**  
-Đất nền:
+**Thông tin bất động sản:**
 - Địa chỉ: {{{address}}}  
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})  
 - Loại: {{{type}}}  
-- Ngõ trước nhà: {{{laneWidth}}} m2
-- Diện tích đất: {{{lotSize}}} m²  
-- Diện tích sàn: {{{size}}} m²  
-- Tiện ích xung quanh: {{{amenities}}}
-Đất có nhà, bổ sung thêm thông tin:
-- Số phòng ngủ: {{{bedrooms}}}  
-- Số phòng tắm: {{{bathrooms}}}  
-- Số tầng: {{{storyNumber}}}  
-- Năm xây dựng: {{{yearBuilt}}}  
+- Diện tích: Đất {{{landArea}}}m² / Lô {{{lotSize}}}m² / Sàn XD {{{houseArea}}}m² / Sử dụng {{{size}}}m²
+- Kích thước: Lộ giới {{{laneWidth}}}m / Mặt tiền {{{facadeWidth}}}m
+- Thiết kế: {{{storyNumber}}} tầng | {{{bedrooms}}} phòng ngủ | {{{bathrooms}}} phòng tắm
+- Năm xây dựng: {{{yearBuilt}}}
+- Tiện ích xung quanh: {{{amenities}}}  
 
 — **DỮ LIỆU THỊ TRƯỜNG HIỆN TẠI** (bắt buộc tham khảo):  
 {{{marketData}}}
+
+— **DỮ LIỆU SEARCH THÔNG TIN BẤT ĐỘNG SẢN** (nếu có):  
+{{{searchData}}}
+
 — **QUY TRÌNH ĐỊNH GIÁ**  
 1. **Phân tích giá thị trường làm baseline**  
    - Lấy giá mới nhất từ {{{marketData}}} làm cơ sở.  
@@ -77,11 +84,12 @@ const prompt = ai.definePrompt({
        - Cách trung tâm thành phố lớn khoảng 4-15 km: 1,08
        - Cách trung tâm thành phố lớn khoảng  hơn 15: 1,04
        - Đất ở nông thôn, tỉnh lẻ, không ở thành phố: 1
-     - Hệ số vị trí 2, sử dụng thông tin {{{laneWidth}}} :
-       - Mặt phố lớn: 1.2
-       - Mặt ngõ ô tô tránh (độ rộng khoảng 8-10m):1,1
-       - Ngõ ô tô một chiều: 1.05 
-       - Ngõ nhỏ xe máy: 0.97
+     - Hệ số vị trí 2, dựa trên {{{laneWidth}}}m (lộ giới) và {{{facadeWidth}}}m (mặt tiền):
+       - Mặt phố lớn (laneWidth ≥ 15m): 1.2
+       - Mặt ngõ ô tô tránh (laneWidth 8-15m): 1.1
+       - Ngõ ô tô một chiều (laneWidth 4-8m): 1.05 
+       - Ngõ nhỏ xe máy (laneWidth < 4m): 0.97
+       - Bonus mặt tiền rộng: +0.02 cho mỗi m nếu facadeWidth ≥ 5m
      - Hệ số pháp lý:
       - Sổ đỏ/ sổ hồng chính chủ: 1.0
       - Đồng sở hữu: 0.8
