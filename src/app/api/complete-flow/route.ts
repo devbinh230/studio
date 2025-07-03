@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getDistanceAnalysis } from '@/lib/distance-utils';
 
 // Helper function to format currency
 function formatCurrency(value: number) {
@@ -21,6 +22,7 @@ interface PropertyDetails {
   bedRoom?: number;
   bathRoom?: number;
   legal?: string;
+  yearBuilt?: number;
   utilities?: any;
   strengths?: any;
   weaknesses?: any;
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest) {
       price_trend: any;
       ai_valuation: any;
       ai_analysis: any;
+      distance_analysis: any;
       success: boolean;
       error: string | null;
       performance: {
@@ -74,6 +77,7 @@ export async function POST(request: NextRequest) {
       price_trend: null,
       ai_valuation: null,
       ai_analysis: null,
+      distance_analysis: null,
       success: false,
       error: null,
       performance: {
@@ -100,37 +104,57 @@ export async function POST(request: NextRequest) {
       'user-agent': 'Dart/2.19 (dart:io)',
     };
 
-    const locationResponse = await fetch(`${locationUrl}?${locationParams}`, {
-      method: 'GET',
-      headers: locationHeaders,
-    });
+    let locationData;
+    try {
+      const locationResponse = await fetch(`${locationUrl}?${locationParams}`, {
+        method: 'GET',
+        headers: locationHeaders,
+      });
 
-    if (!locationResponse.ok) {
-      result.error = 'Cannot get location information from coordinates';
-      return NextResponse.json(result, { status: 500 });
+      if (locationResponse.ok) {
+        locationData = await locationResponse.json();
+        result.location_info = locationData;
+        console.log('✅ Location API successful');
+      } else {
+        console.log('⚠️  Location API failed, using fallback');
+        locationData = { features: [] }; // Empty features to trigger fallback
+        result.location_info = { error: `Location API failed with status ${locationResponse.status}` };
+      }
+    } catch (error) {
+      console.log('⚠️  Location API exception, using fallback:', error);
+      locationData = { features: [] }; // Empty features to trigger fallback
+      result.location_info = { error: `Location API exception: ${error}` };
     }
-
-    const locationData = await locationResponse.json();
-    result.location_info = locationData;
 
     // Step 2: Parse location information (Required for next steps)
     console.log('\n🔄 STEP 2: Parsing location information');
     const features = locationData?.features || [];
+    
+    let parsedAddress;
     if (!features.length) {
-      result.error = 'Cannot parse location information';
-      return NextResponse.json(result, { status: 404 });
+      console.log('⚠️  No features found, using fallback location data');
+      // Fallback với tọa độ Hà Nội
+      parsedAddress = {
+        city: 'ha_noi',
+        district: 'dong_da',
+        ward: 'phuong_trung_liet',
+        coordinates: [longitude, latitude],
+        formatted_address: `${latitude}, ${longitude}`,
+        polygon: [],
+        bounding_box: [],
+      };
+    } else {
+      const mainFeature = features[0];
+      parsedAddress = {
+        city: mainFeature?.c || 'ha_noi',
+        district: mainFeature?.d || 'dong_da',
+        ward: mainFeature?.w || 'phuong_trung_liet',
+        coordinates: mainFeature?.g || [longitude, latitude],
+        formatted_address: mainFeature?.dt || `${latitude}, ${longitude}`,
+        polygon: mainFeature?.polygon || [],
+        bounding_box: mainFeature?.bb || [],
+      };
     }
-
-    const mainFeature = features[0];
-    const parsedAddress = {
-      city: mainFeature?.c || '',
-      district: mainFeature?.d || '',
-      ward: mainFeature?.w || '',
-      coordinates: mainFeature?.g || [],
-      formatted_address: mainFeature?.dt || '',
-      polygon: mainFeature?.polygon || [],
-      bounding_box: mainFeature?.bb || [],
-    };
 
     result.parsed_address = parsedAddress;
     result.performance.step_times.location_and_parsing = Date.now() - step1Start;
@@ -152,6 +176,7 @@ export async function POST(request: NextRequest) {
       bedRoom: 2,
       bathRoom: 2,
       legal: 'pink_book',
+      yearBuilt: 2015,
     };
 
     const mergedDetails = { ...defaultDetails, ...property_details };
@@ -175,6 +200,7 @@ export async function POST(request: NextRequest) {
       legal: mergedDetails.legal,
       storyNumber: mergedDetails.storyNumber,
       type: mergedDetails.type,
+      yearBuilt: mergedDetails.yearBuilt,
     };
 
     result.valuation_payload = valuationPayload;
@@ -235,9 +261,9 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
 - Khoảng giá: ${minPrice.toFixed(0)} - ${maxPrice.toFixed(0)} triệu VND/m²
 - Xu hướng: ${trend} ${trendPercent}% so với ${data.length} tháng trước
 - Giá mới nhất (${latest.month}): ${latest.price} triệu VND/m²
-- Số lượng giao dịch trung bình: ${(data.reduce((sum: number, item: any) => sum + item.count, 0) / data.length).toFixed(0)} giao dịch/tháng
+- Số lượng giao dịch trung bình: ${(data.reduce((sum: number, item: any) => sum + (item.count ?? 0), 0) / data.length).toFixed(0)} giao dịch/tháng
 - Nguồn dữ liệu: API
-- Chi tiết từng tháng: ${data.map((item: any) => `${item.month}: ${item.price}M VND/m²`).join(', ')}
+- Chi tiết từng tháng: ${data.map((item: any) => `${item.month}: ${item.price}M VND/m² ( ${item.count ?? 'N/A'} giao dịch )`).join(', ')}
               `.trim();
             }
           }
@@ -286,14 +312,16 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
       (async () => {
         console.log('🏪 [PARALLEL] Starting utilities API...');
         try {
-          const utilityTypes = ['hospital', 'school', 'shopping_mall', 'park', 'bank', 'gas_station'];
+          const utilityTypes = ['hospital', 'market', 'restaurant', 'cafe', 'supermarket', 'commercial_center'];
           const utilitiesUrl = `${request.nextUrl.origin}/api/utilities`;
           const utilitiesParams = new URLSearchParams({
             lat: latitude.toString(),
             lng: longitude.toString(),
-            distance: '3',
+            distance: '5',
             size: '10',
           });
+
+          console.log(`🏪 Calling utilities API: ${utilitiesUrl}?${utilitiesParams}`);
 
           const utilitiesResponse = await fetch(`${utilitiesUrl}?${utilitiesParams}`, {
             method: 'GET',
@@ -305,12 +333,14 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
 
           if (utilitiesResponse.ok) {
             const utilitiesResult = await utilitiesResponse.json();
+            console.log('🏪 Utilities raw response:', JSON.stringify(utilitiesResult, null, 2));
+            
             const groupedUtilities = utilityTypes.reduce((acc, type) => {
               acc[type] = utilitiesResult.data?.filter((utility: any) => utility.type === type) || [];
               return acc;
             }, {} as Record<string, any[]>);
 
-            console.log('✅ [PARALLEL] Utilities API completed');
+            console.log('✅ [PARALLEL] Utilities API completed with', utilitiesResult.data?.length || 0, 'items');
             return {
               type: 'utilities',
               data: {
@@ -321,12 +351,13 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
               success: true
             };
           } else {
-            console.log('⚠️  [PARALLEL] Utilities API failed');
-            return { type: 'utilities', data: null, success: false };
+            const errorText = await utilitiesResponse.text();
+            console.log('⚠️  [PARALLEL] Utilities API failed:', utilitiesResponse.status, errorText);
+            return { type: 'utilities', data: null, success: false, error: `Status ${utilitiesResponse.status}: ${errorText}` };
           }
         } catch (error) {
           console.error('❌ [PARALLEL] Utilities error:', error);
-          return { type: 'utilities', data: null, success: false };
+          return { type: 'utilities', data: null, success: false, error: `Exception: ${error}` };
         }
       })(),
 
@@ -421,6 +452,37 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
         }
       })(),
 
+      // Task 5: Distance Analysis
+      (async () => {
+        console.log('📏 [PARALLEL] Starting distance analysis...');
+        try {
+          const distanceAnalysis = await getDistanceAnalysis(
+            latitude,
+            longitude,
+            parsedAddress.formatted_address
+          );
+          
+          console.log('✅ [PARALLEL] Distance analysis completed');
+          console.log(`📏 Distance to city center: ${distanceAnalysis.distances.toCityCenter?.distance || 'N/A'} km`);
+          console.log(`📏 Distance to district center: ${distanceAnalysis.distances.toDistrictCenter?.distance || 'N/A'} km`);
+          console.log(`📏 Accessibility rating: ${distanceAnalysis.analysis.accessibility}`);
+          
+          return { 
+            type: 'distance_analysis', 
+            data: distanceAnalysis, 
+            success: true 
+          };
+        } catch (error) {
+          console.error('❌ [PARALLEL] Distance analysis error:', error);
+          return { 
+            type: 'distance_analysis', 
+            data: null, 
+            success: false, 
+            error: `Distance analysis error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+          };
+        }
+      })(),
+
     ];
 
     // Execute all tasks in parallel with timeout
@@ -456,6 +518,10 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
             result.price_trend = data;
             console.log(`✅ Price Trend: ${success ? 'Success' : 'Failed'}`);
             break;
+          case 'distance_analysis':
+            result.distance_analysis = data;
+            console.log(`✅ Distance Analysis: ${success ? 'Success' : 'Failed'}`);
+            break;
         }
       } else {
         console.error(`❌ Task ${index} failed:`, taskResult.reason);
@@ -485,6 +551,21 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
     console.log(`📈 Price trend data points: ${result.price_trend?.data?.length || 0}`);
     console.log(`🤖 AI Valuation: ${result.ai_valuation ? 'Completed' : 'Failed'}`);
     console.log(`🧠 AI Analysis: ${result.ai_analysis ? 'Completed' : 'Failed'}`);
+    console.log(`📏 Distance Analysis: ${result.distance_analysis ? 'Completed' : 'Failed'}`);
+    
+    // Print distance analysis summary
+    if (result.distance_analysis) {
+      const distanceData = result.distance_analysis;
+      if (distanceData.distances?.toCityCenter) {
+        console.log(`   🏛️  To city center (${distanceData.distances.toCityCenter.name}): ${distanceData.distances.toCityCenter.distance} km`);
+      }
+      if (distanceData.distances?.toDistrictCenter) {
+        console.log(`   🏢 To district center (${distanceData.distances.toDistrictCenter.name}): ${distanceData.distances.toDistrictCenter.distance} km`);
+      }
+      if (distanceData.analysis?.accessibility) {
+        console.log(`   🚗 Accessibility: ${distanceData.analysis.accessibility}`);
+      }
+    }
     
     // Check if critical AI operations failed
     if (!result.ai_valuation && !result.error) {

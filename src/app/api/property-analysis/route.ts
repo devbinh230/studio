@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { propertyAnalysis } from '@/ai/flows/property-analysis';
+import { searchRealEstateData } from '@/lib/search-utils';
 
 // Helper function to format market data for AI prompt
 function formatMarketDataForAI(priceTrendData: any): string {
@@ -24,8 +25,9 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
 - Khoảng giá: ${(minPrice/1000000).toFixed(0)} - ${(maxPrice/1000000).toFixed(0)} triệu VND/m²
 - Xu hướng: ${trend} ${trendPercent}% so với ${data.length} tháng trước
 - Giá mới nhất (${latest.month}): ${latest.price} triệu VND/m²
-- Số lượng giao dịch trung bình: ${(data.reduce((sum: number, item: any) => sum + item.count, 0) / data.length).toFixed(0)} giao dịch/tháng
+- Số lượng giao dịch trung bình: ${(data.reduce((sum: number, item: any) => sum + (item.count ?? 0), 0) / data.length).toFixed(0)} giao dịch/tháng
 - Nguồn dữ liệu: ${priceTrendData.source || 'API'}
+- Chi tiết từng tháng: ${data.map((item: any) => `${item.month}: ${item.price}M VND/m² ( ${item.count ?? 'N/A'} giao dịch )`).join(', ')}
 `.trim();
 }
 
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
       bedRoom: 2,
       bathRoom: 2,
       legal: 'pink_book',
+      yearBuilt: 2015,
     };
 
     const mergedDetails = { ...defaultDetails, ...property_details };
@@ -186,6 +189,28 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
 
+    // Step 2.5: Get search data from internet
+    console.log('\n🔍 STEP 2.5: Getting search data from internet...');
+    const step2_5Start = Date.now();
+
+    const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
+    let searchData = '';
+    
+    try {
+      searchData = await searchRealEstateData(locationString, parsedAddress);
+      if (searchData) {
+        console.log('✅ Search data received from internet');
+      } else {
+        console.log('⚠️  No relevant search data found');
+        searchData = 'Không có dữ liệu search phù hợp từ internet.';
+      }
+    } catch (error) {
+      console.log('⚠️  Search API failed, using fallback');
+      searchData = 'Không thể truy cập dữ liệu search từ internet.';
+    }
+
+    console.log(`⏱️  Step 2.5 time: ${Date.now() - step2_5Start}ms`);
+
     // Step 3: Prepare AI input
     console.log('\n🤖 STEP 3: Preparing AI analysis input...');
     const step3Start = Date.now();
@@ -207,7 +232,9 @@ export async function POST(request: NextRequest) {
       facadeWidth: valuationPayload.facadeWidth || 3,
       storyNumber: valuationPayload.storyNumber || 3,
       legal: valuationPayload.legal || 'contract',
+      yearBuilt: mergedDetails.yearBuilt || 2015,
       marketData: marketData,
+      searchData: searchData,
     };
 
     console.log('📊 AI Input:', JSON.stringify(aiInput, null, 2));
@@ -242,7 +269,8 @@ export async function POST(request: NextRequest) {
         total_time: totalTime,
         step_times: {
           location_data: Date.now() - step1Start,
-          market_data: Date.now() - step2Start, 
+          market_data: Date.now() - step2Start,
+          search_data: Date.now() - step2_5Start, 
           ai_preparation: Date.now() - step3Start,
           ai_analysis: Date.now() - step4Start
         }

@@ -23,10 +23,12 @@ const PropertyAnalysisInputSchema = z.object({
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
   laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
   facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
-  storyNumber: z.number().describe('Số tầng của bất động sản.').optional(),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).'),
-  legal: z.string().describe('Tình trạng pháp lý chi tiết (sổ đỏ, hợp đồng mua bán, giấy phép xây dựng, quy hoạch, thế chấp, v.v.).').optional(),
+  storyNumber: z.number().describe('Số tầng của bất động sản.'),
+  legal: z.string().describe('Tình trạng pháp lý (sổ đỏ, hợp đồng, v.v.).'),
+  yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
+  searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
 });
 export type PropertyAnalysisInput = z.infer<typeof PropertyAnalysisInputSchema>;
 
@@ -48,29 +50,52 @@ export async function propertyAnalysis(input: PropertyAnalysisInput): Promise<Pr
 
 const prompt = ai.definePrompt({
   name: 'propertyAnalysisPrompt',
-  input: { schema: PropertyAnalysisInputSchema },
-  output: { schema: PropertyAnalysisOutputSchema },
-  prompt: `Phân tích BĐS và tạo radar score (5 tiêu chí). Dựa trên thông tin đầu vào và dữ liệu thị trường:
+  input: {schema: PropertyAnalysisInputSchema},
+  output: {schema: PropertyAnalysisOutputSchema},
+  prompt: `Phân tích BĐS và tạo radar score (5 tiêu chí). Dựa trên thông tin đầu vào, dữ liệu thị trường và dữ liệu search:
 
 **Thông tin từ input:**
 - Loại: {{{type}}}
 - Địa chỉ: {{{address}}}
-- Diện tích đất / xây dựng: {{{landArea}}}m² / {{{houseArea}}}m²
-- Hẻm / Mặt tiền: {{{laneWidth}}}m / {{{facadeWidth}}}m
-- Số tầng: {{{storyNumber}}}
-- Tiện ích xung quanh: {{{amenities}}}
-- Pháp lý chi tiết: {{{legal}}}
-- Dữ liệu thị trường: {{{marketData}}}
+- Đất/Nhà: {{{landArea}}}m² / {{{houseArea}}}m²
+- Lộ giới/Mặt tiền: {{{laneWidth}}}m / {{{facadeWidth}}}m
+- Tầng: {{{storyNumber}}} | Phòng: {{{bedrooms}}}N-{{{bathrooms}}}T
+- Pháp lý: {{{legal}}}
+- Năm xây dựng: {{{yearBuilt}}}
+- Thị trường: {{{marketData}}}
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})
 
-**Yêu cầu:**
-Kết hợp thông tin tìm kiếm 2025 + chính sách mới + input để tạo 5 điểm (1-10) và 5 mô tả ngắn (1 câu/mục):
-1. **legalityScore** – đánh giá chi tiết giấy tờ (sổ đỏ, hợp đồng mua bán, giấy phép xây dựng, quy hoạch, thế chấp…) và khung pháp lý BĐS mới nhất 2025.  Nếu không đề cập, mặc định pháp lý sổ đỏ chuẩn.
-2. **liquidityScore** – theo diện tích mặt tiền/hẻm, tốc độ giao dịch thị trường, xu hướng 2025.  
-3. **locationScore** – theo vị trí, tiện ích xung quanh khoảng 3-4km (trường học, bệnh viện, TTTM, công viên, giao thông công cộng…), vị trí gần trung tâm, quy hoạch đô thị 2025.  
-4. **evaluationScore** – phân tích giá thị trường từ {{{marketData}}}, xu hướng tăng/giảm giá, chính sách thuế, phí chuyển nhượng 2025.  
-5. **dividendScore** – tiềm năng sinh lời cho thuê/bán lại dựa trên xu hướng đầu tư, lãi suất vay, nhu cầu 2025.
+**Dữ liệu search được:**
+{{{searchData}}}
 
+**Yêu cầu:**
+Phân tích chi tiết từ marketData (giá trung bình, số giao dịch theo năm) + searchData (thông tin thị trường internet) + thông tin input để tạo 5 điểm (1-10) + 5 mô tả ngắn (1 câu/mục):
+
+1. **legalityScore** – Phân tích theo loại sổ:
+   - Sổ đỏ (red_book): 9-10 điểm (pháp lý hoàn hảo)
+   - Sổ hồng (pink_book): 7-8 điểm (pháp lý tốt, có thể chuyển đổi)
+   - Hợp đồng (contract): 4-6 điểm (rủi ro pháp lý cao)
+   - Sổ trắng (white_book): 2-4 điểm (không được công nhận)
+
+2. **liquidityScore** – Dựa trên marketData (số giao dịch/năm) + đặc điểm vật lý:
+   - Phân tích xu hướng giao dịch từ marketData
+   - Mặt tiền rộng ({{{facadeWidth}}}m) + đường rộng ({{{laneWidth}}}m) = thanh khoản cao
+   - Loại nhà phổ biến (lane_house, apartment) = dễ bán hơn villa, đất trống
+
+3. **locationScore** – Phân tích địa danh cụ thể:
+   - Tên đường/phố trong {{{address}}} (đường lớn = điểm cao)
+   - Phường {{{ward}}} + Quận {{{district}}} + TP {{{city}}} (trung tâm = điểm cao)
+   - Cấp hành chính {{{administrativeLevel}}} (0=TW cao nhất, 1=tỉnh thấp hơn)
+
+4. **evaluationScore** – Dựa trên marketData chi tiết:
+   - So sánh giá hiện tại với giá trung bình trong marketData
+   - Phân tích biến động giá theo loại BĐS ({{{type}}})
+   - Đánh giá độ chính xác định giá dựa trên số lượng giao dịch tham khảo
+
+5. **dividendScore** – Tiềm năng sinh lời từ marketData:
+   - Xu hướng tăng/giảm giá từ dữ liệu lịch sử trong marketData
+   - Tỷ suất cho thuê theo loại nhà và vị trí cụ thể
+   - Tiềm năng tăng giá dựa trên số giao dịch và thanh khoản thị trường
 Trả về object radarScore gồm 5 score và descriptions. Tiếng Việt, ngắn gọn và súc tích.`,
 });
 

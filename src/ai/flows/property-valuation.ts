@@ -23,9 +23,10 @@ const PropertyValuationRangeInputSchema = z.object({
   bedrooms: z.number().describe('Số phòng ngủ.').optional(),
   bathrooms: z.number().describe('Số phòng tắm.').optional(),
   lotSize: z.number().describe('Diện tích lô đất (m²).'),
-  yearBuilt: z.number().describe('Năm hoàn thành xây dựng.').optional(),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).'),
+  yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
+  searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
@@ -63,7 +64,6 @@ const prompt = ai.definePrompt({
 
 — **DỮ LIỆU THỊ TRƯỜNG HIỆN TẠI** (bắt buộc tham khảo):  
 {{{marketData}}}
-
 — **QUY TRÌNH ĐỊNH GIÁ**  
 1. **Phân tích giá thị trường làm baseline**  
    - Lấy giá mới nhất từ {{{marketData}}} làm cơ sở.  
@@ -116,9 +116,9 @@ const prompt = ai.definePrompt({
    - Nếu vượt, điều chỉnh về giới hạn gần nhất.
 
 **VÍ DỤ TÍNH TOÁN:**
-Nếu giá thị trường = 277 triệu VND/m², diện tích = 45m²
+Nếu giá thị trường trung bình = 277 triệu VND/m², diện tích = 45m²
 → Giá cơ bản = 277 × 45 = 12.465 tỷ VND
-→ Sau điều chỉnh loại nhà (theo các hệ số) = 13.334 tỷ VND  
+→ Sau điều chỉnh loại nhà (theo các hệ số) = 14.334 tỷ VND  
 → reasonableValue = 14.334.000.000 VND
 
 Trả về JSON với đơn vị VND (không có dấu phẩy):
