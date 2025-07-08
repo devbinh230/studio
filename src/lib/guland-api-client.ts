@@ -165,6 +165,7 @@ export class GulandApiClient {
     
     try {
       console.log('🎯 Getting planning data for:', params);
+      console.log('🌐 Full API URL:', url);
       
       const response = await apiCall<ApiResponse>(url, {
         method: 'POST',

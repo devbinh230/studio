@@ -17,8 +17,10 @@ export default function HanoiPlanningDemo() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Bản đồ Quy hoạch Hà Nội 2030
           </h1>          <p className="text-gray-600">
-            Hiển thị bản đồ với 3 layer: Base map Geoapify, quy hoạch Hà Nội 2030 và bản đồ đất đai. 
-            <strong> Click vào bản đồ để xem thông tin quy hoạch chi tiết.</strong>
+            Hiển thị bản đồ với 3 layer: Base map Google, quy hoạch Hà Nội 2030 và bản đồ đất đai. 
+            <strong> Click vào bản đồ để xem thông tin quy hoạch chi tiết xuất hiện ngay trên bản đồ dưới dạng popup!</strong>
+            <br />
+            <span className="text-orange-600 font-medium">Có thể zoom tối đa đến level 25 (từ level 19+ có thể bị vỡ pixel do API chỉ hỗ trợ đến 18)</span>
           </p>
         </div>
 
@@ -47,15 +49,15 @@ export default function HanoiPlanningDemo() {
                 <div className="flex items-start gap-3">
                   <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
                   <div>
-                    <h3 className="font-semibold text-blue-700">Đọc thông tin</h3>
-                    <p className="text-sm text-blue-600">Thông tin chi tiết sẽ hiển thị bên dưới bản đồ</p>
+                    <h3 className="font-semibold text-blue-700">Xem popup thông tin</h3>
+                    <p className="text-sm text-blue-600">Thông tin chi tiết sẽ hiển thị ngay trên bản đồ dưới dạng popup có thể cuộn</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">4</div>
                   <div>
-                    <h3 className="font-semibold text-blue-700">Phân tích dữ liệu</h3>
-                    <p className="text-sm text-blue-600">Xem diện tích, loại đất và thông tin quy hoạch</p>
+                    <h3 className="font-semibold text-blue-700">Tương tác với popup</h3>
+                    <p className="text-sm text-blue-600">Copy tọa độ, mở Google Maps, hoặc đóng popup bằng nút X</p>
                   </div>
                 </div>
               </div>
@@ -64,7 +66,7 @@ export default function HanoiPlanningDemo() {
 
           {/* Main Map */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">🗺️ Bản đồ Interactive</h2>
+            <h2 className="text-xl font-semibold mb-4">🗺️ Bản đồ Quy hoạch Hà Nội</h2>
             <HanoiPlanningMap 
               height="600px"
               showControls={true}
@@ -75,12 +77,12 @@ export default function HanoiPlanningDemo() {
             <h2 className="text-xl font-semibold mb-4">Thông tin Bản đồ</h2>
             <div className="grid md:grid-cols-3 gap-6">
               <div>
-                <h3 className="font-semibold text-lg mb-3">Base Map: Geoapify</h3>
+                <h3 className="font-semibold text-lg mb-3">Base Map: Google Hybrid</h3>
                 <ul className="space-y-2 text-sm text-gray-600">
                   <li>• Bản đồ nền OSM Bright style</li>
                   <li>• Hiển thị đường phố và địa hình cơ bản</li>
                   <li>• Cung cấp ngữ cảnh địa lý</li>
-                  <li>• Hỗ trợ zoom cao đến level 18</li>
+                  <li>• Hỗ trợ zoom cao đến level 25 (18+ vỡ pixel)</li>
                 </ul>
               </div>
               <div>
@@ -99,74 +101,6 @@ export default function HanoiPlanningDemo() {
                   <li>• Phân loại đất theo mục đích sử dụng</li>
                   <li>• Ranh giới các thửa đất</li>
                   <li>• Thông tin quyền sở hữu đất</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* Demo Locations */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Địa điểm Demo</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                {
-                  name: "Hồ Hoàn Kiếm",
-                  coords: "21.0285, 105.8542",
-                  description: "Trung tâm lịch sử Hà Nội"
-                },
-                {
-                  name: "Nhà thờ Đức Bà",
-                  coords: "21.0245, 105.8412",
-                  description: "Công trình kiến trúc Gothic"
-                },
-                {
-                  name: "Lăng Chủ tịch Hồ Chí Minh",
-                  coords: "21.0367, 105.8349",
-                  description: "Lăng Bác Hồ"
-                },
-                {
-                  name: "Chùa Một Cột",
-                  coords: "21.0458, 105.8019",
-                  description: "Di tích lịch sử"
-                }
-              ].map((location, index) => (
-                <div key={index} className="p-4 border rounded-lg bg-gray-50">
-                  <h3 className="font-semibold text-sm mb-1">{location.name}</h3>
-                  <p className="text-xs text-gray-600 mb-2">{location.description}</p>
-                  <p className="text-xs text-blue-600 font-mono">{location.coords}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Technical Info */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Thông tin Kỹ thuật</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>                <h3 className="font-semibold mb-2">Cấu hình Tile Layers</h3>
-                <div className="bg-gray-100 p-3 rounded text-sm font-mono">
-                  <p className="mb-2">
-                    <span className="text-purple-600">Base Map:</span><br/>
-                    https://maps.geoapify.com/v1/tile/osm-bright/{`{z}`}/{`{x}`}/{`{y}`}.png?apiKey=[API_KEY]
-                  </p>
-                  <p className="mb-2">
-                    <span className="text-blue-600">Layer 1:</span><br/>
-                    https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/{`{z}`}/{`{x}`}/{`{y}`}.png
-                  </p>
-                  <p>
-                    <span className="text-green-600">Layer 2:</span><br/>
-                    https://s3-hn-2.cloud.cmctelecom.vn/guland7/land/ha-noi/{`{z}`}/{`{x}`}/{`{y}`}.png
-                  </p>
-                </div>
-              </div>
-              <div>
-                <h3 className="font-semibold mb-2">Thông số Bản đồ</h3>
-                <ul className="space-y-1 text-sm text-gray-600">
-                  <li>• <strong>Hệ tọa độ:</strong> WGS84 (EPSG:4326)</li>
-                  <li>• <strong>Tile Size:</strong> 256x256 pixels</li>
-                  <li>• <strong>Zoom Level:</strong> 0-18</li>
-                  <li>• <strong>Projection:</strong> Web Mercator</li>
-                  <li>• <strong>Format:</strong> PNG</li>
                 </ul>
               </div>
             </div>
