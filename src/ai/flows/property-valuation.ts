@@ -110,9 +110,9 @@ Chú thích về Giá nhà nước:
    - Tổng diện tích sàn = Diện tích đất ({{{size}}} m²) × Số tầng ({{{storyNumber}}})  
    - Giá trị xây dựng = Tổng diện tích sàn × Đơn giá xây × Hệ số hao mòn × Hệ số tiện ích
    - Đơn giá xây dựng (thành phố lớn):
-   - Nhà 4–5 tầng BTCT: 7–8 triệu/m²
-   - Nhà 2–3 tầng: 6–5 triệu/m²
-   -Nhà cấp 4 hoặc nhà cũ: 4.5 triệu/m²
+      - Nhà 4–5 tầng BTCT: 7–8 triệu/m²
+      - Nhà 2–3 tầng: 5–6 triệu/m²
+      - Nhà cấp 4 hoặc nhà cũ: 4.5 triệu/m²
   -Hệ số hao mòn theo tuổi nhà
     - Tuổi nhà = Năm hiện tại – {{{yearBuilt}}}
      - Áp dụng hệ số: < 3 năm → 1.1–1.15
