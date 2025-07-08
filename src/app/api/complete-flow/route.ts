@@ -28,7 +28,7 @@ interface PropertyDetails {
   strengths?: any;
   weaknesses?: any;
 }
-
+          
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

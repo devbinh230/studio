@@ -198,6 +198,7 @@ export async function POST(request: NextRequest) {
       yearBuilt: mergedDetails.yearBuilt || 2015,
       marketData: marketData,
       searchData: 'Không có dữ liệu search từ internet.',
+      price_gov:'Dữ liệu giá đất nhà nước',
     };
 
     console.log('📊 Shared AI Input prepared');

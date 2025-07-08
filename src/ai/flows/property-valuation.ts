@@ -50,7 +50,7 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
 const prompt = ai.definePrompt({
   name: 'propertyValuationRangePrompt',
   input: {schema: PropertyValuationRangeInputSchema},
-  output: {schema: PropertyValuationRangeOutputSchema},
+  // output: {schema: PropertyValuationRangeOutputSchema},
   prompt: `NHIỆM VỤ: TÍNH TOÁN KHOẢNG GIÁ BẤT ĐỘNG SẢN
 — **THÔNG TIN BẤT ĐỘNG SẢN**  
 Đất nền:
@@ -147,7 +147,7 @@ const propertyValuationRangeFlow = ai.defineFlow(
   {
     name: 'propertyValuationRangeFlow',
     inputSchema: PropertyValuationRangeInputSchema,
-    outputSchema: PropertyValuationRangeOutputSchema,
+    // outputSchema: PropertyValuationRangeOutputSchema,
   },
   async input => {
     const response = await prompt(input);
