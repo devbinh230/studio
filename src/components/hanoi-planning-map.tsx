@@ -48,6 +48,261 @@ interface PlanningData {
   };
 }
 
+// Interface for search suggestions
+interface SearchSuggestion {
+  formatted: string;
+  lat: number;
+  lon: number;
+  place_id: string;
+  address_line1?: string;
+  address_line2?: string;
+  category?: string;
+}
+
+// Component for embedded address search
+function MapAddressSearch({ 
+  onLocationSelect 
+}: { 
+  onLocationSelect: (lat: number, lng: number, address: string) => void 
+}) {
+  const [searchValue, setSearchValue] = useState('');
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Close suggestions when clicking outside and cleanup timeout
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current && 
+        !suggestionsRef.current.contains(event.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      // Cleanup timeout on unmount
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const fetchSuggestions = async (query: string) => {
+    if (!query.trim() || query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const geoapifyApiKey = getGeoapifyApiKey();
+      const response = await fetch(
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${geoapifyApiKey}`
+      );
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
+          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
+          lat: feature.properties.lat,
+          lon: feature.properties.lon,
+          place_id: feature.properties.place_id || Math.random().toString(),
+          address_line1: feature.properties.address_line1,
+          address_line2: feature.properties.address_line2,
+          category: feature.properties.category,
+        }));
+        
+        setSuggestions(suggestionsList);
+        setShowSuggestions(true);
+        setSelectedSuggestionIndex(-1);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+      }
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: SearchSuggestion) => {
+    setSearchValue(suggestion.formatted);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    onLocationSelect(suggestion.lat, suggestion.lon, suggestion.formatted);
+  };
+
+  const clearSearch = () => {
+    setSearchValue('');
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
+    setSelectedSuggestionIndex(-1);
+    
+    // Clear previous timeout if exists
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Set new timeout for debouncing
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchSuggestions(value);
+    }, 300);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : suggestions.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
+          handleSuggestionClick(suggestions[selectedSuggestionIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        searchInputRef.current?.blur();
+        break;
+    }
+  };
+
+  return (
+    <div className="relative w-80 max-w-[calc(100vw-2rem)] sm:max-w-sm">
+      {/* Search Input */}
+      <div className="relative">
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchValue}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => searchValue.length > 1 && fetchSuggestions(searchValue)}
+          placeholder="Tìm kiếm địa chỉ..."
+          className="w-full px-8 py-2 pr-20 text-sm bg-white border border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400"
+        />
+        
+        {/* Loading indicator */}
+        {isLoadingSuggestions && (
+          <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          </div>
+        )}
+        
+        {/* Clear button */}
+        {searchValue && (
+          <button
+            onClick={clearSearch}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded"
+            title="Xóa"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+        
+        {/* Search icon */}
+        <div className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+      </div>
+      
+      {/* Suggestions Dropdown */}
+      {showSuggestions && (
+        <div 
+          ref={suggestionsRef}
+          className="absolute top-full left-0 right-0 z-[2000] mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+        >
+          {isLoadingSuggestions ? (
+            <div className="p-3 text-center">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="text-sm text-gray-500 mt-1">Đang tìm kiếm...</p>
+            </div>
+          ) : suggestions.length > 0 ? (
+            <div>
+              {suggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.place_id || index}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  className={`w-full px-3 py-2 text-left border-b last:border-b-0 text-sm transition-colors ${
+                    index === selectedSuggestionIndex 
+                      ? 'bg-blue-100 border-blue-200' 
+                      : 'hover:bg-blue-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate font-medium text-gray-900">{suggestion.address_line1 || suggestion.formatted}</div>
+                      {suggestion.address_line2 && (
+                        <div className="truncate text-xs text-gray-500">{suggestion.address_line2}</div>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 text-center text-sm text-gray-500">
+              Không tìm thấy kết quả phù hợp
+            </div>
+          )}
+          
+          {/* Keyboard navigation hint */}
+          {suggestions.length > 0 && (
+            <div className="px-3 py-1 text-xs text-gray-400 bg-gray-50 border-t">
+              ↑↓ di chuyển • Enter chọn • Esc đóng
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component for handling map clicks and events
 function MapClickHandler({ 
   onMapClick, 
@@ -655,7 +910,7 @@ Tọa độ: ${selectedLocation ? `${selectedLocation[0]}, ${selectedLocation[1]
       </div>
 
       {/* Map Layer Controls from Geocoding - Removed and moved to a separate component */}
-      {planningData?.geocodingData?.data?.html && (
+      {/* {planningData?.geocodingData?.data?.html && (
         <div className="bg-orange-50 p-3 rounded border-l-2 border-orange-400">
           <div className="font-medium text-orange-800 text-xs mb-2">🗺️ Các loại bản đồ</div>
           <div 
@@ -663,7 +918,7 @@ Tọa độ: ${selectedLocation ? `${selectedLocation[0]}, ${selectedLocation[1]
             dangerouslySetInnerHTML={{ __html: planningData.geocodingData.data.html }}
           />
         </div>
-      )}
+      )} */}
     </div>
   );
 }
@@ -725,7 +980,121 @@ function MapTypesSelector({
   return null;
 }
 
+  // Component for handling map-service HTML with click events
+function MapServiceDisplay({ 
+  htmlContent, 
+  onDetailLayerClick 
+}: { 
+  htmlContent: string;
+  onDetailLayerClick: (layerId: string, layerName: string) => void;
+}) {
+  const [planningItems, setPlanningItems] = useState<Array<{
+    id: string;
+    name: string;
+    url?: string;
+  }>>([]);
+
+  useEffect(() => {
+    if (htmlContent) {
+      try {
+        // Parse HTML and extract planning items
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        
+        // Find all detail-layer links
+        const detailLayerLinks = doc.querySelectorAll('.detail-layer');
+        
+        const items = Array.from(detailLayerLinks).map(link => {
+          const id = link.getAttribute('data-id') || '';
+          const name = link.textContent?.trim() || '';
+          const url = link.getAttribute('data-url-2030') || '';
+          
+          return { id, name, url };
+        }).filter(item => item.id && item.name); // Only include items with both id and name
+        
+        setPlanningItems(items);
+        console.log('Parsed planning items:', items);
+      } catch (error) {
+        console.error('Error parsing planning HTML:', error);
+        setPlanningItems([]);
+      }
+    }
+  }, [htmlContent]);
+
+  const handleItemClick = (item: { id: string; name: string; url?: string }) => {
+    console.log('🎯 Planning item clicked:', item);
+    console.log('🚀 Calling onDetailLayerClick with:', item.id, item.name);
+    onDetailLayerClick(item.id, item.name);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="text-center">
+        <h4 className="text-lg font-semibold text-gray-800 mb-2">🗺️ Danh sách quy hoạch</h4>
+        <p className="text-sm text-gray-600">
+          Click vào quy hoạch để xem trên bản đồ
+        </p>
+      </div>
+      
+      {/* Planning Items Grid */}
+      <div className="max-h-96 overflow-y-auto space-y-2">
+        {planningItems.length > 0 ? (
+          planningItems.map((item, index) => (
+            <div
+              key={`${item.id}-${index}`}
+              onClick={() => handleItemClick(item)}
+              className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors group"
+            >
+              <div className="flex items-start gap-3">
+                {/* Icon */}
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-1.447-.894L15 4m0 13V4m-6 3l6-3" />
+                  </svg>
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <h5 className="font-medium text-gray-900 leading-tight group-hover:text-blue-700 transition-colors">
+                    {item.name}
+                  </h5>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ID: {item.id}
+                  </p>
+                </div>
+                
+                {/* Arrow Icon */}
+                <div className="text-gray-400 group-hover:text-blue-500 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p>Không có dữ liệu quy hoạch</p>
+          </div>
+        )}
+      </div>
+      
+      {/* Footer Info */}
+      {planningItems.length > 0 && (
+        <div className="text-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
+          Tổng cộng: {planningItems.length} quy hoạch
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component for parsing and displaying HTML content
+
 function PlanningInfoDisplay({ htmlContent }: { htmlContent: string }) {  const [parsedInfo, setParsedInfo] = useState<{
     title: string;
     address: string;
@@ -1071,8 +1440,8 @@ function MapTypeButtons({
 }
 
 export default function HanoiPlanningMap({ 
-  height = '600px', 
-  showControls = true,
+  height = '500px', 
+  showControls = true, 
   className = '',
   baseMapType = 'google-hybrid'
 }: HanoiPlanningMapProps) {
@@ -1092,36 +1461,186 @@ export default function HanoiPlanningMap({
   const [showLayer1, setShowLayer1] = useState(true);
   const [showLayer2, setShowLayer2] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isControlsExpanded, setIsControlsExpanded] = useState(true);
+  const [isControlsExpanded, setIsControlsExpanded] = useState(false);
   const [showPlanningOverlay, setShowPlanningOverlay] = useState(false);
   const [activeMapType, setActiveMapType] = useState<string>('QH 2030');
   const planningOverlaysRef = useRef<L.DivOverlay[]>([]);
   const [selectedPlanningArea, setSelectedPlanningArea] = useState<any>(null);
   const [layer1Url, setLayer1Url] = useState('https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/{z}/{x}/{y}.png');
-  const [layer1Name, setLayer1Name] = useState('Quy hoạch Hà Nội 2030');
+  const [layer1Name, setLayer1Name] = useState('quy hoạch2030');
   const [geocodingData, setGeocodingData] = useState<any>(null);
   const geocodingFetched = useRef(false);
+
+  // Add new state for special modal handling
+  const [showSpecialModal, setShowSpecialModal] = useState(false);
+  const [specialModalData, setSpecialModalData] = useState<{
+    type: 'qhxd' | 'qhkhac';
+    name: string;
+    htmlContent: string;
+  } | null>(null);
+  const [isLoadingMapService, setIsLoadingMapService] = useState(false);
+  
+  // State to track when map types are being updated
+  const [isUpdatingMapTypes, setIsUpdatingMapTypes] = useState(false);
+
+  // State to store current map-service data for clicked location
+  const [currentMapServiceData, setCurrentMapServiceData] = useState<string | null>(null);
 
   // Tọa độ trung tâm Hà Nội
   const center: [number, number] = [21.0285, 105.8542];
 
   // Predefined map types for consistent usage
-  const mapTypes = [
+  const defaultMapTypes = [
     { id: 'qh2030', name: 'QH 2030', layerType: 'layer_1', url: 'https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/{z}/{x}/{y}.png', color: '#7dd3fc' },
     // { id: 'kh2025', name: 'KH 2025', layerType: 'layer_2022', url: 'https://s3-hn-2.cloud.cmctelecom.vn/guland9/qh-2025/ha-noi/quan-ha-dong/{z}/{x}/{y}.png', color: '#a5b4fc' },
     { id: 'qh500', name: 'QH 1/500, 1/2000', layerType: 'layer_qhpk', url: 'https://s3-han02.fptcloud.com/guland/hn-qhxd-2/{z}/{x}/{y}.png', color: '#fca5a5' },
     { id: 'qhpk', name: 'QH phân khu', layerType: 'layer_qhpk_2', url: 'https://s3-hn-2.cloud.cmctelecom.vn/guland4/hanoi-qhpk2/{z}/{x}/{y}.png', color: '#fdba74' },
-    { id: 'qhxd', name: 'QH xây dựng', layerType: 'layer_qhpk_qhxd', url: 'https://s3-hn-2.cloud.cmctelecom.vn/guland4/hanoi-qhpk2/{z}/{x}/{y}.png', color: '#86efac' },
+    // { id: 'qhxd', name: 'QH xây dựng', layerType: 'layer_qhpk_qhxd', url: 'https://s3-hn-2.cloud.cmctelecom.vn/guland4/hanoi-qhpk2/{z}/{x}/{y}.png', color: '#86efac' },
     { id: 'qhkhac', name: 'QH khác', layerType: 'layer_1', url: 'https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/{z}/{x}/{y}.png', color: '#d8b4fe' }
   ];
+
+  // State for current map types with updated URLs
+  const [currentMapTypes, setCurrentMapTypes] = useState(defaultMapTypes);
+  
+  // Safety check to ensure currentMapTypes is always an array
+  const safeCurrentMapTypes = Array.isArray(currentMapTypes) ? currentMapTypes : defaultMapTypes;
+
+  // Function to call map-service API (used for fallback only)
+  const fetchMapServiceData = async (lat: number, lng: number) => {
+    try {
+      console.log('🌐 Fetching map service data for coordinates:', lat, lng);
+      const response = await fetch(`/api/map-service?lat=${lat}&lng=${lng}`);
+      const data = await response.json();
+      
+      console.log('📦 Map service response:', data);
+      
+      if (data.success && data.data?.data) {
+        console.log('✅ Map service data received, length:', data.data.data.length);
+        return data.data.data; // HTML content
+      }
+      console.warn('⚠️ No valid map service data received');
+      return null;
+    } catch (error) {
+      console.error('❌ Error fetching map service data:', error);
+      return null;
+    }
+  };
+
+  // Function to call detail-layer API
+  const fetchDetailLayerData = async (layerId: string) => {
+    try {
+      const response = await fetch(`/api/map-service/detail-layer?id=${layerId}`);
+      const data = await response.json();
+      
+      if (data.success && data.data?.data) {
+        return data.data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching detail layer data:', error);
+      return null;
+    }
+  };
+
+  // Function to extract tile URLs from HTML content
+  const extractTileUrlsFromHtml = (htmlContent: string) => {
+    if (!htmlContent) return {};
+    
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      
+      const urlMap: { [key: string]: string } = {};
+      
+      // Extract QH 2030 URL
+      const qh2030Button = doc.querySelector('#btn-2030, .btn--map-switch[data-type="layer_1"]');
+      if (qh2030Button) {
+        const url = qh2030Button.getAttribute('data-url');
+        if (url && url.includes('{z}/{x}/{y}')) {
+          urlMap['qh2030'] = url;
+        }
+      }
+      
+      // Extract KH 2025 URL
+      const kh2025Button = doc.querySelector('.btn--map-switch[data-type="layer_2022"]');
+      if (kh2025Button) {
+        const url = kh2025Button.getAttribute('data-url');
+        if (url && url.includes('{z}/{x}/{y}')) {
+          urlMap['kh2025'] = url;
+        }
+      }
+      
+      // Extract QH 1/500, 1/2000 URL
+      const qh500Buttons = doc.querySelectorAll('.btn--map-switch[data-type="layer_qhpk_2"], .btn--map-switch[data-type="layer_qhpk"]');
+      qh500Buttons.forEach(button => {
+        const text = button.textContent?.trim() || '';
+        const url = button.getAttribute('data-url');
+        if (text.includes('1/500') && url && url.includes('{z}/{x}/{y}')) {
+          urlMap['qh500'] = url;
+        }
+      });
+      
+      // Extract QH phân khu URL
+      const qhpkButtons = doc.querySelectorAll('.btn--map-switch[data-type="layer_qhpk_2"]');
+      qhpkButtons.forEach(button => {
+        const text = button.textContent?.trim() || '';
+        const url = button.getAttribute('data-url');
+        if (text.includes('phân khu') && url && url.includes('{z}/{x}/{y}')) {
+          urlMap['qhpk'] = url;
+        }
+      });
+      
+      // Extract QH xây dựng URL  
+      const qhxdButton = doc.querySelector('.btn-qhxd, .btn--map-switch[class*="qhxd"]');
+      if (qhxdButton) {
+        const url = qhxdButton.getAttribute('data-url');
+        if (url && url.includes('{z}/{x}/{y}')) {
+          urlMap['qhxd'] = url;
+        }
+      }
+      
+      console.log('🔍 Extracted tile URLs from HTML:', urlMap);
+      return urlMap;
+    } catch (error) {
+      console.error('Error extracting URLs from HTML:', error);
+      return {};
+    }
+  };
+
+  // Function to update URLs based on geocoding data for location
+  const updateMapTypeUrls = (geocodingData: any) => {
+    if (!geocodingData?.data?.html) return defaultMapTypes;
+    
+    // Extract tile URLs from HTML content
+    const extractedUrls = extractTileUrlsFromHtml(geocodingData.data.html);
+    
+    // Only update if we actually found some valid URLs
+    const hasValidUrls = Object.keys(extractedUrls).length > 0;
+    if (!hasValidUrls) {
+      console.log('⚠️ No valid tile URLs found in geocoding response, keeping defaults');
+      return defaultMapTypes;
+    }
+    
+    console.log('✅ Updating map types with extracted URLs:', extractedUrls);
+    
+    return defaultMapTypes.map(mapType => {
+      // Use extracted URL if available, otherwise keep default
+      const newUrl = extractedUrls[mapType.id] || mapType.url;
+      
+      return {
+        ...mapType,
+        url: newUrl
+      };
+    });
+  };
 
   // Set default layer to QH 2030 on first render
   useEffect(() => {
     if (isClient && !geocodingFetched.current) {
       // Use the first map type (QH 2030) as default
-      setLayer1Url(mapTypes[0].url);
-      setLayer1Name(mapTypes[0].name);
-      setActiveMapType(mapTypes[0].name);
+      setLayer1Url(defaultMapTypes[0].url);
+      setLayer1Name(defaultMapTypes[0].name);
+      setActiveMapType(defaultMapTypes[0].name);
     }
   }, [isClient]);
 
@@ -1149,7 +1668,7 @@ export default function HanoiPlanningMap({
           body: JSON.stringify({
             lat: jittered.lat,
             lng: jittered.lng,
-            path: "soi-quy-hoach/ha-noi"
+            path: "soi-quy-hoach"
           }),
         });
         
@@ -1187,7 +1706,7 @@ export default function HanoiPlanningMap({
           // Default to first mapType if couldn't extract from HTML
           else if (data.data?.url) {
             setLayer1Url(data.data.url);
-            setLayer1Name(data.data.name || 'Quy hoạch Hà Nội');
+            setLayer1Name(data.data.name || 'Quy hoạch Hà   Nội');
           }
         }
         
@@ -1201,70 +1720,340 @@ export default function HanoiPlanningMap({
     fetchGeocodingData();
   }, [isClient]);
 
+  // Helper function to update map type URLs based on geocoding data
+  const updateMapTypesFromGeocodingData = useCallback((newGeocodingData: any, source: string = '') => {
+    const dataToUse = newGeocodingData?.success ? newGeocodingData : geocodingData;
+    if (dataToUse?.data?.html) {
+      const updatedMapTypes = updateMapTypeUrls(dataToUse);
+      
+      // Only update state if the URLs actually changed
+      const urlsChanged = updatedMapTypes.some((newType: any, index: number) => {
+        const currentType = safeCurrentMapTypes[index];
+        return currentType && newType.url !== currentType.url;
+      });
+      
+      if (urlsChanged) {
+        console.log(`🔄 ${source}: Map type URLs changed, updating state:`, updatedMapTypes);
+        setIsUpdatingMapTypes(true);
+        setCurrentMapTypes(updatedMapTypes);
+        
+        // Update the current active layer if it exists
+        const currentMapType = updatedMapTypes.find((mt: any) => mt.name === activeMapType);
+        if (currentMapType && currentMapType.url !== layer1Url) {
+          console.log(`🗺️ ${source}: Updating active layer "${activeMapType}" with new URL:`, currentMapType.url);
+          setLayer1Url(currentMapType.url);
+          setLayer1Name(currentMapType.name);
+          
+          // Force update of map type buttons by triggering re-render
+          setTimeout(() => {
+            console.log(`🔄 ${source}: Map type buttons should now reflect new URLs`);
+            setIsUpdatingMapTypes(false);
+          }, 100);
+        } else {
+          setIsUpdatingMapTypes(false);
+        }
+      } else {
+        console.log(`✅ ${source}: Map type URLs unchanged, keeping current state`);
+        setIsUpdatingMapTypes(false);
+      }
+    } else {
+      setIsUpdatingMapTypes(false);
+    }
+  }, [geocodingData, activeMapType, layer1Url, safeCurrentMapTypes]);
+
+  // Function to handle search location selection
+  const handleSearchLocationSelect = useCallback(async (lat: number, lng: number, address: string) => {
+    console.log('🔍 Search location selected:', lat, lng, address);
+    
+    // Pan map to selected location
+    if (mapInstance) {
+      mapInstance.setView([lat, lng], Math.max(currentZoom, 16), { animate: true });
+    }
+    
+    // Trigger planning API call for this location
+    // Call the same logic as handleMapClick
+    setPlanningData(null);
+    setError(null);
+    setCurrentMapServiceData(null);
+    
+    setIsLoading(true);
+    setSelectedLocation([lat, lng]);
+
+    console.log('🎯 Search triggered map click at:', lat, lng);
+
+    try {
+      const [geocodingResponse, planningResponse, mapServiceResponse] = await Promise.all([
+        fetch('/api/guland-proxy/geocoding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, lng, path: "soi-quy-hoach" }),
+        }),
+        fetch('/api/guland-proxy/planning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marker_lat: lat, marker_lng: lng, province_id: 1 }),
+        }),
+        fetch(`/api/map-service?lat=${lat}&lng=${lng}`)
+      ]);
+
+      const newGeocodingData = await geocodingResponse.json();
+      const planningData: PlanningData = await planningResponse.json();
+      const mapServiceData = await mapServiceResponse.json();
+
+      if (newGeocodingData?.success) {
+        setGeocodingData(newGeocodingData);
+      }
+
+      setPlanningData({
+        ...planningData,
+        geocodingData: newGeocodingData?.success ? newGeocodingData : geocodingData
+      });
+
+      if (mapServiceData?.success && mapServiceData?.data?.data) {
+        setCurrentMapServiceData(mapServiceData.data.data);
+      } else {
+        console.warn('⚠️ No valid map service data received from search');
+        setCurrentMapServiceData(null);
+      }
+
+      // Update all map type URLs based on new location data
+      updateMapTypesFromGeocodingData(newGeocodingData, 'Search');
+      
+    } catch (err) {
+      console.error('❌ Search API error:', err);
+      setError('Lỗi khi lấy thông tin quy hoạch: ' + (err as Error).message);
+      setPlanningData(null);
+      setCurrentMapServiceData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [mapInstance, currentZoom, updateMapTypesFromGeocodingData]);
+
   // Function to call planning API
   const handleMapClick = async (lat: number, lng: number) => {
     // Clear previous data first
     setPlanningData(null);
     setError(null);
+    setCurrentMapServiceData(null);
     
     setIsLoading(true);
     setSelectedLocation([lat, lng]);
 
-    console.log('Map clicked at:', lat, lng); // Debug log
+    console.log('🎯 Map clicked at:', lat, lng); // Debug log
 
     try {
-      // Call planning API
-      const planningResponse = await fetch('/api/guland-proxy/planning', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          marker_lat: lat,
-          marker_lng: lng,
-          province_id: 1 // Default to Hà Nội
+      // Fetch multiple APIs in parallel for better performance
+      const [geocodingResponse, planningResponse, mapServiceResponse] = await Promise.all([
+        // 1. Fetch geocoding data
+        fetch('/api/guland-proxy/geocoding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lat, lng, path: "soi-quy-hoach" }),
         }),
-      });
+        
+        // 2. Fetch planning data  
+        fetch('/api/guland-proxy/planning', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ marker_lat: lat, marker_lng: lng, province_id: 1 }),
+        }),
+        
+        // 3. Fetch map-service data for "QH khác"
+        fetch(`/api/map-service?lat=${lat}&lng=${lng}`)
+      ]);
 
-      const planningData: PlanningData = await planningResponse.json();
-      console.log('Planning API response:', planningData); // Debug log
+      // Process geocoding response
+      const newGeocodingData = await geocodingResponse.json();
+      console.log('🌐 New geocoding response:', newGeocodingData);
       
-      // Combine with existing geocoding data
+      if (newGeocodingData?.success) {
+        setGeocodingData(newGeocodingData);
+      }
+
+      // Process planning response
+      const planningData: PlanningData = await planningResponse.json();
+      console.log('📋 Planning API response:', planningData);
+      
+      // Combine with NEW geocoding data
       setPlanningData({
         ...planningData,
-        geocodingData: geocodingData
+        geocodingData: newGeocodingData?.success ? newGeocodingData : geocodingData
       });
+
+      // Process map-service response
+      const mapServiceData = await mapServiceResponse.json();
+      console.log('🗺️ Map service response:', mapServiceData);
+      
+      if (mapServiceData?.success && mapServiceData?.data?.data) {
+        console.log('✅ Map service data updated for QH khác, length:', mapServiceData.data.data.length);
+        setCurrentMapServiceData(mapServiceData.data.data);
+      } else {
+        console.warn('⚠️ No valid map service data received');
+        setCurrentMapServiceData(null);
+      }
+
+      // Update all map type URLs based on new location data
+      updateMapTypesFromGeocodingData(newGeocodingData, 'Map Click');
       
       // Check if we have HTML data
       if (planningData?.data?.html) {
-        console.log('HTML data found, length:', planningData.data.html.length); // Debug log
+        console.log('📄 Planning HTML data found, length:', planningData.data.html.length);
       } else {
-        console.log('No HTML data in response'); // Debug log
+        console.log('📄 No planning HTML data in response');
       }
     } catch (err) {
-      console.error('Planning API error:', err); // Debug log
+      console.error('❌ API error:', err);
       setError('Lỗi khi lấy thông tin quy hoạch: ' + (err as Error).message);
-      setPlanningData(null); // Ensure planningData is null on error
+      setPlanningData(null);
+      setCurrentMapServiceData(null);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Unified function to handle detail layer loading
+  const handleDetailLayerLoad = async (layerId: string, layerName: string) => {
+    console.log('🔄 Loading detail layer:', layerId, layerName);
+    try {
+      setIsLoadingMapService(true); // Show loading state
+      const layerData = await fetchDetailLayerData(layerId);
+      console.log('📦 Layer data received:', layerData);
+      
+      if (layerData?.url) {
+        // Load new tile layer on map
+        console.log('🗺️ Setting new layer URL:', layerData.url);
+        setLayer1Url(layerData.url);
+        setLayer1Name(layerData.name || layerName);
+        setActiveMapType(layerData.name || layerName);
+        
+        // Make sure layer is visible
+        setShowLayer1(true);
+        
+        // Close modal after successful load
+        setShowSpecialModal(false);
+        
+        // Force re-render by updating state
+        setTimeout(() => {
+          console.log(`✅ Successfully loaded detail layer: ${layerData.name || layerName}`);
+          console.log(`📍 Active map type: ${layerData.name || layerName}`);
+          console.log(`🌐 Layer URL: ${layerData.url}`);
+        }, 100);
+        
+        return true;
+      } else {
+        console.error('❌ No URL found in layer data for ID:', layerId);
+        console.error('❌ Full layer data:', layerData);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error loading detail layer:', error);
+      return false;
+    } finally {
+      setIsLoadingMapService(false); // Hide loading state
+    }
+  };
+
   // Function to handle layer switching from geocoding controls
-  const handleLayerSwitch = (layerType: string, url: string, name: string) => {
-    console.log('Switching layer:', { layerType, url, name });
+  const handleLayerSwitch = async (layerType: string, url: string, name: string) => {
+    console.log('🔄 Switching layer:', { layerType, url, name });
     
-    // Check if URL is valid
-    if (!url) {
-      console.warn('Missing URL for layer:', layerType, name);
+    // Check if this is a special case for qhxd or qhkhac
+    // Check by both layerType and name to be more accurate
+    const mapTypeData = safeCurrentMapTypes.find((mt: any) => 
+      mt.layerType === layerType || 
+      mt.id === layerType ||
+      mt.name === name ||
+      (name.includes('QH xây dựng') && mt.id === 'qhxd') ||
+      (name.includes('QH khác') && mt.id === 'qhkhac')
+    );
+    
+    // Also check directly if the name/type indicates special handling
+    const isQhxd = name.includes('QH xây dựng') || name.includes('xây dựng') || layerType === 'layer_qhpk_qhxd';
+    const isQhkhac = name.includes('QH khác') || name.includes('khác') || 
+                     (layerType === 'layer_khac') ||
+                     (layerType === 'layer_1' && name.includes('khác'));
+    
+    // Don't treat "QH 2030" as "QH khác" even though both use layer_1
+    const isQh2030 = name.includes('QH 2030') || name.includes('2030');
+    
+    console.log('🔍 Layer switch debug:', {
+      layerType,
+      name,
+      isQhxd,
+      isQhkhac,
+      isQh2030,
+      mapTypeData: mapTypeData ? mapTypeData.id : 'not found',
+      hasSelectedLocation: !!selectedLocation,
+      hasMapInstance: !!mapInstance
+    });
+    
+    // Handle special cases for QH khác and QH xây dựng
+    if ((isQhkhac && !isQh2030) || (mapTypeData && mapTypeData.id === 'qhkhac')) {
+      // For "QH khác", always fetch fresh data (no caching)
+      let lat: number, lng: number;
+      
+      if (selectedLocation) {
+        [lat, lng] = selectedLocation;
+        console.log('📍 Using selected location for QH khác:', lat, lng);
+      } else if (mapInstance) {
+        const center = mapInstance.getCenter();
+        lat = center.lat;
+        lng = center.lng;
+        console.log('🗺️ Using map center for QH khác:', lat, lng);
+      } else {
+        lat = 21.0285;
+        lng = 105.8542;
+        console.warn('⚠️ Using fallback coordinates for QH khác:', lat, lng);
+      }
+      
+      console.log('🔄 Fetching fresh map-service data for QH khác...');
+      setIsLoadingMapService(true);
+      
+      const htmlContent = await fetchMapServiceData(lat, lng);
+      
+      if (htmlContent) {
+        // Update cached data for reference
+        setCurrentMapServiceData(htmlContent);
+        
+        setSpecialModalData({
+          type: 'qhkhac',
+          name: 'QH khác',
+          htmlContent: htmlContent
+        });
+        setShowSpecialModal(true);
+        console.log('🔥 Showing QH khác modal with fresh data');
+      } else {
+        console.warn('⚠️ Failed to fetch fresh map service data');
+      }
+      
+      setIsLoadingMapService(false);
       return;
+    } else if (isQhxd || (mapTypeData && mapTypeData.id === 'qhxd')) {
+      // For "QH xây dựng", use geocoding HTML if available
+      const htmlToUse = geocodingData?.data?.html;
+      if (htmlToUse) {
+        setSpecialModalData({
+          type: 'qhxd',
+          name: 'QH xây dựng',
+          htmlContent: htmlToUse
+        });
+        setShowSpecialModal(true);
+        console.log('🔥 Showing QH xây dựng modal with geocoding data');
+        return;
+      } else {
+        console.warn('⚠️ No HTML data available for QH xây dựng modal');
+      }
     }
     
-    // Set layer data
-    setLayer1Url(url);
-    setLayer1Name(name || 'Quy hoạch');
-    setActiveMapType(name || layerType);
-    console.log(`Đã chuyển sang layer: ${name}`);
+    // Fallback: Load normal layer if not special case or if special case failed
+    if (url) {
+      setLayer1Url(url);
+      setLayer1Name(name || 'Quy hoạch');
+      setActiveMapType(name || layerType);
+      console.log(`✅ Đã chuyển sang layer: ${name}`);
+    } else {
+      console.warn('⚠️ Missing URL for layer:', layerType, name);
+    }
     
     // Update all buttons with the same data-type and URL
     setTimeout(() => {
@@ -1758,7 +2547,7 @@ export default function HanoiPlanningMap({
             />
           )}
           
-          {/* Layer 1: Bản đồ quy hoạch Hà Nội 2030 - Luôn ở trên base map */}
+          {/* Layer 1: Bản đồ quy hoạch2030 - Luôn ở trên base map */}
           {showLayer1 && (
             <TileLayer
             key={layer1Url} // Add key to force re-render when URL changes
@@ -1832,18 +2621,24 @@ export default function HanoiPlanningMap({
           ))}
         </MapContainer>
         
+        {/* Address Search Bar - Embedded in top-left corner */}
+        <div className="absolute top-4 left-4 z-[1000] w-auto">
+          <MapAddressSearch onLocationSelect={handleSearchLocationSelect} />
+        </div>
+
         {/* Map Types Selector - Embedded directly in map */}
         <div className="absolute bottom-0 left-0 right-0 bg-white bg-opacity-90 border-t shadow-md p-2 z-[1000]">
           <div className="flex flex-nowrap justify-center gap-1 overflow-x-auto pb-1">
-            {mapTypes.map((mapType) => (
+            {safeCurrentMapTypes.map((mapType: any) => (
               <button
                 key={mapType.id}
                 onClick={() => handleLayerSwitch(mapType.layerType, mapType.url, mapType.name)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors border rounded-md whitespace-nowrap ${
+                disabled={isLoadingMapService && (mapType.id === 'qhkhac' || mapType.id === 'qhxd')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors border rounded-md whitespace-nowrap relative ${
                   activeMapType === mapType.name
                     ? 'bg-blue-100 text-blue-800 border-blue-300'
                     : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
-                }`}
+                } ${isLoadingMapService && (mapType.id === 'qhkhac' || mapType.id === 'qhxd') ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={{
                   backgroundColor: activeMapType === mapType.name ? mapType.color : undefined,
                 }}
@@ -1851,11 +2646,124 @@ export default function HanoiPlanningMap({
                 data-url={mapType.url}
                 data-name={mapType.name}
               >
-                {mapType.name}
+                {/* Update indicator */}
+                {isUpdatingMapTypes && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse" 
+                       title="Đang cập nhật URLs cho vị trí mới"></div>
+                )}
+                {isLoadingMapService && (mapType.id === 'qhkhac' || mapType.id === 'qhxd') ? (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Loading...
+                  </span>
+                ) : (
+                  mapType.name
+                )}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Special Modal for qhxd and qhkhac */}
+        {showSpecialModal && specialModalData && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="absolute inset-0 bg-black bg-opacity-50 z-[2999]"
+              onClick={() => setShowSpecialModal(false)}
+            ></div>
+            
+            {/* Modal - Compact & Responsive */}
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-2xl border z-[3000] max-w-xs sm:max-w-lg w-[95%] sm:w-[85%] lg:w-[60%] max-h-[70vh] sm:max-h-[75vh] overflow-hidden">
+              {/* Header - More compact */}
+              <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-3 rounded-t-lg flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base">{specialModalData.name}</h3>
+                  <p className="text-xs opacity-90">
+                    {specialModalData.type === 'qhkhac' 
+                      ? 'Thông tin quy hoạch chi tiết - Fresh data từ API'
+                      : 'Thông tin quy hoạch xây dựng'
+                    }
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Loading indicator */}
+                  {isLoadingMapService && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  <button
+                    onClick={() => setShowSpecialModal(false)}
+                    className="text-white hover:bg-white hover:bg-opacity-20 p-1 rounded transition-colors"
+                    title="Đóng"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Content - Compact & Responsive */}
+              <div className="p-2 sm:p-3 overflow-y-auto max-h-[50vh] sm:max-h-[55vh]">
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span 
+                      className="px-3 py-1 text-sm font-bold text-white rounded"
+                      style={{ backgroundColor: safeCurrentMapTypes.find((mt: any) => mt.id === specialModalData.type)?.color || '#86efac' }}
+                    >
+                      {specialModalData.type === 'qhxd' ? 'QH Xây Dựng' : 'QH Khác'}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {selectedLocation ? `${selectedLocation[0].toFixed(6)}, ${selectedLocation[1].toFixed(6)}` : 'N/A'}
+                    </span>
+                    {/* Fresh data indicator */}
+                    {specialModalData.type === 'qhkhac' && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                        🔄 Fresh API
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="bg-blue-50 p-2 rounded-lg border-l-4 border-blue-400">
+                    <h4 className="font-medium text-blue-800 text-xs mb-1">
+                      ℹ️ Thông tin đặc biệt
+                    </h4>
+                    <p className="text-blue-700 text-xs leading-relaxed">
+                      {specialModalData.type === 'qhxd' 
+                        ? 'Dữ liệu quy hoạch xây dựng chi tiết từ geocoding API.'
+                        : 'Dữ liệu quy hoạch khác được fetch fresh mỗi lần click "QH khác". Click vào các quy hoạch để load layer trên bản đồ.'
+                      }
+                    </p>
+                  </div>
+                </div>
+
+                {/* Use different components based on modal type */}
+                {specialModalData.type === 'qhkhac' ? (
+                  <MapServiceDisplay 
+                    htmlContent={specialModalData.htmlContent} 
+                    onDetailLayerClick={handleDetailLayerLoad}
+                  />
+                ) : (
+                  <PlanningInfoDisplay htmlContent={specialModalData.htmlContent} />
+                )}
+              </div>
+
+              {/* Footer - More compact */}
+              <div className="bg-gray-50 p-2 rounded-b-lg border-t text-xs text-gray-500 flex justify-between items-center">
+                <span>📍 Dữ liệu từ API Map-Service {specialModalData.type === 'qhkhac' ? '(Fresh fetch)' : ''}</span>
+                <button
+                  onClick={() => setShowSpecialModal(false)}
+                  className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700 transition-colors"
+                  disabled={isLoadingMapService}
+                >
+                  {isLoadingMapService ? 'Loading...' : 'Đóng'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
         
         {/* Instructions overlay */}
         <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg border z-[1000] max-w-xs">
@@ -1882,8 +2790,14 @@ export default function HanoiPlanningMap({
           {isControlsExpanded && (
             <div className="p-3">
               <p className="text-xs text-gray-600 mb-2">
-                Click vào bản đồ để xem thông tin quy hoạch chi tiết tại vị trí đó
+                🎯 Click vào bản đồ để tự động tải thông tin quy hoạch cho vị trí đó
               </p>
+              <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded mb-2">
+                <div className="font-medium">✨ Fresh Data Flow:</div>
+                <div>• Click map → Load planning data</div>
+                <div>• Click "QH khác" → Fresh fetch API data</div>
+                <div>• Click links in modal → Load layers</div>
+              </div>
               <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
                 <div className="flex items-center justify-between mb-2">
                   <span>Zoom level:</span>
@@ -1920,6 +2834,19 @@ export default function HanoiPlanningMap({
                     title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
                   >
                     {isFullscreen ? '⤡' : '⤢'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (mapInstance) {
+                        const center = mapInstance.getCenter();
+                        console.log('🎯 Current map center:', center.lat, center.lng);
+                        alert(`Map center: ${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`);
+                      }
+                    }}
+                    className="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700 transition-colors"
+                    title="Test current map center"
+                  >
+                    📍
                   </button>
                 </div>
                 
@@ -2076,6 +3003,19 @@ export default function HanoiPlanningMap({
                     title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
                   >
                     {isFullscreen ? '⤡' : '⤢'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (mapInstance) {
+                        const center = mapInstance.getCenter();
+                        console.log('🎯 Current map center:', center.lat, center.lng);
+                        alert(`Map center: ${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`);
+                      }
+                    }}
+                    className="px-1.5 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700"
+                    title="Test current map center"
+                  >
+                    📍
                   </button>
                 </div>
               </div>

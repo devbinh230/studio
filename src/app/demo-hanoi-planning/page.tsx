@@ -15,9 +15,9 @@ export default function HanoiPlanningDemo() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Bản đồ Quy hoạch Hà Nội 2030
+            Bản đồ quy hoạch2030
           </h1>          <p className="text-gray-600">
-            Hiển thị bản đồ với 3 layer: Base map Google, quy hoạch Hà Nội 2030 và bản đồ đất đai. 
+            Hiển thị bản đồ với 3 layer: Base map Google, quy hoạch2030 và bản đồ đất đai. 
             <strong> Click vào bản đồ để xem thông tin quy hoạch chi tiết xuất hiện ngay trên bản đồ dưới dạng popup!</strong>
             <br />
             <span className="text-orange-600 font-medium">Có thể zoom tối đa đến level 25 (từ level 19+ có thể bị vỡ pixel do API chỉ hỗ trợ đến 18)</span>
@@ -66,7 +66,7 @@ export default function HanoiPlanningDemo() {
 
           {/* Main Map */}
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">🗺️ Bản đồ Quy hoạch Hà Nội</h2>
+            <h2 className="text-xl font-semibold mb-4">🗺️ Bản đồ quy hoạch</h2>
             <HanoiPlanningMap 
               height="600px"
               showControls={true}

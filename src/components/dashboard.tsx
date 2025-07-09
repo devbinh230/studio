@@ -298,7 +298,7 @@ export default function Dashboard() {
                   <h4 className="font-semibold text-slate-800 group-hover:text-purple-700">Bản đồ Hà Nội</h4>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Bản đồ quy hoạch Hà Nội 2030 với layer đất đai
+                  Bản đồ quy hoạch2030 với layer đất đai
                 </p>
               </a>
               

@@ -43,7 +43,7 @@
     "clsx": "^2.1.1",
     "cycletls": "^1.0.27",
     "date-fns": "^3.6.0",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "embla-carousel-react": "^8.6.0",
     "fingerprint-injector": "^2.1.69",
     "firebase": "^11.9.1",

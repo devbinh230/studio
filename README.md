@@ -144,7 +144,7 @@ const planning = await gulandApiClient.getPlanningData({
 const geocoding = await gulandApiClient.geocoding({
   lat: 21.0277644,
   lng: 105.8341598,
-  path: 'soi-quy-hoach/ha-noi'
+  path: 'soi-quy-hoach'
 });
 ```
 
