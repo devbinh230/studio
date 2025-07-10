@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { number } from 'zod';
 
 const PropertyValuationRangeInputSchema = z.object({
   address: z.string().describe('Địa chỉ chi tiết của bất động sản (có thể để trống nếu đã cung cấp city/district/ward).').optional(),
@@ -24,6 +25,7 @@ const PropertyValuationRangeInputSchema = z.object({
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
   laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
   facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
+  facadeCount: z.number().describe('Số lượng mặt tiền (m), ví dụ 1,2,3.').optional(),
   storyNumber: z.number().describe('Số tầng.').optional(),
   bedrooms: z.number().describe('Số phòng ngủ.').optional(),
   bathrooms: z.number().describe('Số phòng tắm.').optional(),
@@ -32,6 +34,8 @@ const PropertyValuationRangeInputSchema = z.object({
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
   searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
   price_gov: z.string().describe('Dữ liệu giá bất động sản nhà nước').optional(),
+  house_direction: z.string().describe('Hướng nhà').optional(),
+  legal: z.string().describe('Loại hợp đồng (contract, white_book, pink_book, red_book).').optional(),
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
@@ -43,102 +47,197 @@ const PropertyValuationRangeOutputSchema = z.object({
 });
 export type PropertyValuationRangeOutput = z.infer<typeof PropertyValuationRangeOutputSchema>;
 
+// Helper function to calculate coefficients (from price.py)
+function calculateCoefficients(input: PropertyValuationRangeInput) {
+  // Lane coefficient
+  const laneWidth = input.laneWidth || 0;
+  let laneCoef = 0.0;
+  if (laneWidth >= 5) {
+    laneCoef = 0.04; // car_avoid
+  } else if (laneWidth >= 3) {
+    laneCoef = 0.01; // car_lane
+  } else if (laneWidth > 0) {
+    laneCoef = -0.03; // small_lane
+  }
+
+
+  // Legal coefficient (mapping theo legal type)
+  let legalCoef = 0.0;
+  switch (input.legal) {
+    case 'contract':
+      legalCoef = -0.2;
+      break;
+    case 'white_book':
+      legalCoef = -0.3;
+      break;
+    case 'pink_book':
+    case 'red_book':
+      legalCoef = 0.0;
+      break;
+    default:
+      legalCoef = 0.0;
+  }
+
+const facadeWidth  = input.facadeWidth  || 0;  // mét
+const facadeCount  = input.facadeCount  || 1;  // 1, 2, 3…
+
+// 1) Hệ số theo CHIỀU RỘNG mặt tiền
+let widthCoef = 0.0;
+if (facadeWidth >= 8) {          // mặt tiền ≥ 10 m
+  widthCoef = 0.07;                 // premium 10 %
+} else if (facadeWidth >= 5) {    // 6 – <10 m
+  widthCoef = 0.04;                 // premium 5 %
+} else if (facadeWidth >= 3.5) {    // 4 – <6 m
+  widthCoef = 0.0;                 // premium 2 %
+} else if (facadeWidth > 0) {     // <4 m
+  widthCoef = -0.03;                // chiết khấu 3 %
+}
+
+// 2) Hệ số theo SỐ MẶT TIỀN (góc, 3 mặt thoáng…)
+let cornerCoef = 0.0;
+switch (facadeCount) {
+  case 2:  // lô góc hai mặt tiền
+    cornerCoef = 0.07;  // +8 %
+    break;
+  case 3:  // ba mặt tiền
+    cornerCoef = 0.1;  // +12 %
+    break;
+  default: // 1 mặt tiền hoặc >3 mặt tiền tùy chỉnh
+    cornerCoef = 0.0;
+}
+
+
+  return { laneCoef, legalCoef, widthCoef, cornerCoef };
+}
+
+// Helper function to calculate construction price (from price.py)
+function calculateConstructionPrice(input: PropertyValuationRangeInput) {
+  const size = input.size || 0;
+  const storyNumber = input.storyNumber || 0;
+  const yearBuilt = input.yearBuilt || 0;
+  const bedrooms = input.bedrooms || 0;
+  const bathrooms = input.bathrooms || 0;
+
+  // Total floor area
+  const totalFloorArea = size * storyNumber;
+
+  // Unit price based on story number
+  let unitPrice = 4_500_000; // 1 story
+  if (storyNumber >= 4) {
+    unitPrice = 7_500_000;
+  } else if (storyNumber >= 2) {
+    unitPrice = 5_500_000;
+  }
+
+  // Wear coefficient based on house age
+  const currentYear = new Date().getFullYear();
+  const houseAge = currentYear - (yearBuilt || currentYear);
+  let wearCoef = 1.0;
+  if (houseAge < 3) {
+    wearCoef = 0.1;
+  } else if (houseAge < 5) {
+    wearCoef = 0.07;
+  } else if (houseAge < 10) {
+    wearCoef = 0.02;
+  } else if (houseAge < 20) {
+    wearCoef = -0.10;
+  }
+
+  // Room coefficient
+  let roomCoef = 0.0;
+  if (bedrooms < 2) {
+    roomCoef = -0.03;
+  } else if (bedrooms > 4) {
+    roomCoef = 0.02;
+  }
+  // Toilet coefficient
+  let toiletCoef = 0.0;
+  if (bathrooms && storyNumber && bathrooms >= storyNumber) {
+    toiletCoef = 0.02;
+  } else if (bathrooms && storyNumber && bathrooms < storyNumber) {
+    toiletCoef = -0.02;
+  }
+  // Construction price
+  const priceHouse = totalFloorArea * (1 + unitPrice + wearCoef + roomCoef + toiletCoef);
+  return priceHouse;
+}
+
+// Helper function to extract market price from marketData
+function extractMarketPrice(marketData: string): number {
+  const match = marketData.match(/Giá trung bình:\s*([\d\.]+)\s*triệu VND\/m²/);
+  if (match) {
+    return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
+  }
+  return 0;
+}
+
+// Calculate reasonableValue using price.py logic
+function calculateReasonableValue(input: PropertyValuationRangeInput): number {
+  const baseMarketPrice = extractMarketPrice(input.marketData);
+  const lotSize = input.lotSize || 0;
+  const basePrice = baseMarketPrice * lotSize;
+  
+  const { laneCoef, legalCoef, widthCoef, cornerCoef } = calculateCoefficients(input);
+  
+  const reasonableValue = basePrice * (1+laneCoef + legalCoef+ widthCoef + cornerCoef);
+   
+  return reasonableValue;
+}
+
 export async function propertyValuationRange(input: PropertyValuationRangeInput): Promise<PropertyValuationRangeOutput> {
   return propertyValuationRangeFlow(input);
 }
 
+// Schema mở rộng cho LLM input
+const PropertyValuationRangeLLMInputSchema = PropertyValuationRangeInputSchema.extend({
+  reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản'),
+  price_house: z.number().describe('Giá xây dựng'),
+});
+
+export type PropertyValuationRangeLLMInput = z.infer<typeof PropertyValuationRangeLLMInputSchema>;
+
 const prompt = ai.definePrompt({
   name: 'propertyValuationRangePrompt',
-  input: {schema: PropertyValuationRangeInputSchema},
-  // output: {schema: PropertyValuationRangeOutputSchema},
-  prompt: `NHIỆM VỤ: TÍNH TOÁN KHOẢNG GIÁ BẤT ĐỘNG SẢN
+  input: {schema: PropertyValuationRangeLLMInputSchema},
+  output: {schema: PropertyValuationRangeOutputSchema},
+  prompt: `NHIỆM VỤ: QUYẾT ĐỊNH GIÁ CUỐI CHO BẤT ĐỘNG SẢN
+
 — **THÔNG TIN BẤT ĐỘNG SẢN**  
-Đất nền:
 - Địa chỉ: {{{address}}}  
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})  
 - Loại: {{{type}}}  
-- Ngõ trước nhà: {{{laneWidth}}} m2
+- Ngõ trước nhà: {{{laneWidth}}} m
 - Diện tích đất: {{{lotSize}}} m²  
 - Diện tích sàn: {{{size}}} m²  
 - Tiện ích xung quanh: {{{amenities}}}
 - Giá nhà nước (Giá tham chiếu từ Nhà nước): {{{price_gov}}} VND/m²
 Chú thích về Giá nhà nước:
-- Vị trí 1 (VT1): Mặt tiền đường
-- Vị trí 2 (VT2): Hẻm rộng trên 5m
-- Vị trí 3 (VT3): Hẻm rộng 3m - 5m
-- Vị trí 4 (VT4): Hẻm rộng dưới 3m
+VT1: Thửa đất của một chủ sử dụng có ít nhất một mặt giáp đường/phố có tên trong bảng giá ban hành kèm theo Quyết định. Vị trí thuận lợi nhất.
+VT2: Thửa đất có ít nhất một mặt giáp ngõ (ngách/hẻm), với mặt cắt ngõ ≥ 3,5m (tính từ chỉ giới hè đường đến mốc giới đầu tiên của thửa đất).
+VT3: Giáp ngõ có mặt cắt từ 2m đến < 3,5m (tính từ chỉ giới hè đường).
+VT4: Giáp ngõ có mặt cắt < 2m (tính từ chỉ giới hè đường). Vị trí kém thuận lợi nhất.
+Vị trí sau luôn có điều kiện kém hơn vị trí liền trước.
 Đất có nhà, bổ sung thêm thông tin:
 - Số phòng ngủ: {{{bedrooms}}}  
 - Số phòng tắm: {{{bathrooms}}}  
 - Số tầng: {{{storyNumber}}}  
 - Năm xây dựng: {{{yearBuilt}}}  
+- Tiện ích xung quanh: {{{amenities}}}
 
-— **DỮ LIỆU THỊ TRƯỜNG HIỆN TẠI** (bắt buộc tham khảo):  
+— **DỮ LIỆU THỊ TRƯỜNG**  
 {{{marketData}}} {{{searchData}}}
 
-— **QUY TRÌNH ĐỊNH GIÁ**  
-1. **Phân tích giá thị trường làm baseline**  
-   - Lấy giá mới nhất từ {{{marketData}}} và {{{searchData}}} làm cơ sở.  
-   Từ dữ liệu price_gov đã cung cấp, hãy xác định mức giá nhà nước phù hợp nhất với vị trí bất động sản (dựa vào Ngõ trước nhà và Đường).
-   - Lưu ý quan trọng: Giá giao dịch thực tế trên thị trường thường cao hơn giá nhà nước ({{{price_gov}}}) khoảng 500% - 700%. Hãy sử dụng thông tin này để điều chỉnh nhận định ban đầu về giá thị trường.
-   - Khoảng giá bất động sản dự kiến phải nằm trong khoảng ±15% so với giá trung bình thị trường thu thập được, sau khi đã cân nhắc đến sự chênh lệch so với giá nhà nước.
+— **GIÁ NHÀ NƯỚC**  
+{{{price_gov}}}
 
-2. **Tính giá trị reasonableValue** 
-   - Công thức:  
-     GIÁ_CƠ_BẢN = GIÁ_TRUNG_BÌNH_THỊ_TRƯỜNG × Diện tích đất ({{{lotSize}}} m²)
-   - Giá trị = Diện tích × Giá thị trường × Hệ số vị trí 1 x Hệ số vị trí 2 × Hệ số pháp lý x hệ số tiện ích
-     - Hệ số vị trí 1:   
-       - Cách trung tâm thành phố lớn khoảng 4km: 1.05-1.09
-       - Cách trung tâm thành phố lớn khoảng 4-15 km: 1.02-1.05
-       - Cách trung tâm thành phố lớn khoảng  hơn 15: 1
-       - Đất ở nông thôn, tỉnh lẻ, không ở thành phố: 0.9
-     - Hệ số vị trí 2, sử dụng thông tin {{{laneWidth}}}, nếu không đề cập là hệ số 1 :
-       - Mặt phố lớn(giáp đường lớn, có vỉa hè): 1.08-1.1
-       - Mặt ngõ ô tô tránh (độ rộng khoảng 5m):1.04-1.08
-       - Ngõ ô tô một chiều(độ rộng khoảng 3-5m): 1-1.04
-       - Ngõ nhỏ xe máy(dưới 3m): 0.97
-     - Hệ số pháp lý, nếu không đề cập là hệ số 1:
-      - Sổ đỏ/ sổ hồng chính chủ: 1.0
-      - Đồng sở hữu/ hợp đồng: 0.8
-      - Giấy viết tay: 0.55
-      - Tranh chấp hoặc quy hoạch: 0.45
-     - Hệ số tiện ích:
-      - Có nhiều hơn 3 tiện ích xung quanh: 1.02-1.05
-      - Có khoảng 1-2 tiện ích xung quanh: 1-1.02
-Đảm bảo reasonableValue / lotSize nằm trong khoảng 85%–115% giá trung bình thị trường ĐÃ ĐƯỢC ĐIỀU CHỈNH và CÂN NHẮC SỰ CHÊNH LỆCH VỚI GIÁ NHÀ NƯỚC.  
-3. **Tính giá trị xây dựng price_house**  
-   - Tổng diện tích sàn = Diện tích đất ({{{size}}} m²) × Số tầng ({{{storyNumber}}})  
-   - Giá trị xây dựng = Tổng diện tích sàn × Đơn giá xây × Hệ số hao mòn × Hệ số tiện ích
-   - Đơn giá xây dựng (thành phố lớn):
-   - Nhà 4–5 tầng BTCT: 7–8 triệu/m²
-   - Nhà 2–3 tầng: 6–5 triệu/m²
-   -Nhà cấp 4 hoặc nhà cũ: 4.5 triệu/m²
-  -Hệ số hao mòn theo tuổi nhà
-    - Tuổi nhà = Năm hiện tại – {{{yearBuilt}}}
-     - Áp dụng hệ số: < 3 năm → 1.1–1.15
-     - 3–5 năm → 1.07–1.1
-     - 5–10 năm → 1.00–1.07
-     - 10–20 năm → 0.90
-     - Hơn 20 năm → 0.80
-  - Hệ số tiện ích (dựa trên bố trí phòng)
-    - < 2 phòng ngủ: -3%
-    - 3–4 phòng ngủ (phù hợp diện tích): 0%
-    - 4 phòng ngủ (hợp lý): +3%
-    - Mỗi tầng ≥1 toilet hoặc toilet riêng phòng ngủ: +2–4%
-   - Thiếu toilet (<1 toilet/tầng): -1–3%
+- reasonableValue: {{{reasonableValue}}} VND
+- price_house: {{{price_house}}} VND
 
-4. **Áp dụng hệ số điều chỉnh và xác định giá cuối**  
-   - lowValue = reasonableValue × 0.90  (giá bán nhanh)  
-   - highValue = reasonableValue × 1.1 (giá bán chậm, ưu đãi)  
-   - price_house = Giá trị xây dựng  
-
-
-**VÍ DỤ TÍNH TOÁN:**
-Nếu giá thị trường = 277 triệu VND/m², diện tích = 45m²
-→ Giá cơ bản = 277 × 45 = 12.465 tỷ VND
-→ Sau điều chỉnh loại nhà (theo các hệ số) = 13.334 tỷ VND  
-→ reasonableValue = 14.334.000.000 VND
-
+— **Áp dụng hệ số điều chỉnh và xác định giá cuối**  
+1. **lowValue**: reasonableValue × 0.90  (giá bán nhanh), tham khảo giá nhà nước từ {{{price_gov}}} làm giá thấp nhất
+2. **reasonableValue**
+3. **highValue**: reasonableValue × 1.1 (giá bán chậm, ưu đãi)  
+4. **price_house**: price_house
 
 `,
 });
@@ -147,10 +246,21 @@ const propertyValuationRangeFlow = ai.defineFlow(
   {
     name: 'propertyValuationRangeFlow',
     inputSchema: PropertyValuationRangeInputSchema,
-    // outputSchema: PropertyValuationRangeOutputSchema,
+    outputSchema: PropertyValuationRangeOutputSchema,
   },
   async input => {
-    const response = await prompt(input);
+    // Calculate reasonableValue and price_house using price.py logic
+    const reasonableValue = calculateReasonableValue(input);
+    const price_house = calculateConstructionPrice(input);
+    
+    // Prepare input for AI with calculated values
+    const aiInput: PropertyValuationRangeLLMInput = {
+      ...input,
+      reasonableValue,
+      price_house
+    };
+
+    const response = await prompt(aiInput);
     if (!response.output) {
       throw new Error('No output received from AI model');
     }

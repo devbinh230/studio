@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
     let price_gov = '';
     if (streetName && parsedAddress.district) {
       try {
-        const outputPath = path.join(process.cwd(), 'output.json');
+        const outputPath = path.join(process.cwd(), 'price_gov.json');
         const outputData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
         const queryNorm = normalizeStreetName(streetName);
         // Bước 1: Lọc theo tên đường
@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
-        console.log('⚠️  Error reading output.json:', err);
+        console.log('⚠️  Error reading price_gov.json:', err);
       }
     }
 

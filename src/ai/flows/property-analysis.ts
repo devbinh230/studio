@@ -17,7 +17,7 @@ const PropertyAnalysisInputSchema = z.object({
   ward: z.string().describe('Phường/Xã.'),
   administrativeLevel: z.number().describe('Cấp hành chính (0: đô thị trung ương, 1: tỉnh, ...).'),
   type: z.string().describe('Loại bất động sản (ví dụ: lane_house, apartment, NORMAL, v.v.).'),
-  size: z.number().describe('Diện tích sàn (m²).'),
+  size: z.number().describe('Diện tích xây dựng (m²).'),
   lotSize: z.number().describe('Diện tích lô đất (m²).'),
   landArea: z.number().describe('Diện tích đất (m²).'),
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
