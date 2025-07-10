@@ -873,13 +873,13 @@ function PlanningInfoCompact({
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+      {/* Action buttons - smaller size */}
+      <div className="grid grid-cols-3 gap-1 pt-1 border-t">
         <button 
           onClick={() => selectedLocation && window.open(`https://maps.google.com/?q=${selectedLocation[0]},${selectedLocation[1]}`, '_blank')}
-          className="px-2 py-1.5 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200 transition-colors flex items-center justify-center gap-1"
+          className="px-1 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-medium hover:bg-blue-200 transition-colors flex items-center justify-center"
         >
-          🗺️ Maps
+          🗺️
         </button>
         <button 
           onClick={() => {
@@ -888,9 +888,9 @@ function PlanningInfoCompact({
               alert('Đã copy tọa độ!');
             }
           }}
-          className="px-2 py-1.5 bg-green-100 text-green-700 rounded text-xs font-medium hover:bg-green-200 transition-colors flex items-center justify-center gap-1"
+          className="px-1 py-1 bg-green-100 text-green-700 rounded text-[10px] font-medium hover:bg-green-200 transition-colors flex items-center justify-center"
         >
-          📋 Copy
+          📋
         </button>
         <button 
           onClick={() => {
@@ -903,9 +903,9 @@ Tọa độ: ${selectedLocation ? `${selectedLocation[0]}, ${selectedLocation[1]
             navigator.clipboard.writeText(info);
             alert('Đã copy thông tin đầy đủ!');
           }}
-          className="px-2 py-1.5 bg-purple-100 text-purple-700 rounded text-xs font-medium hover:bg-purple-200 transition-colors flex items-center justify-center gap-1"
+          className="px-1 py-1 bg-purple-100 text-purple-700 rounded text-[10px] font-medium hover:bg-purple-200 transition-colors flex items-center justify-center"
         >
-          📄 Info
+          📄
         </button>
       </div>
 
@@ -1386,6 +1386,11 @@ interface HanoiPlanningMapProps {
   showControls?: boolean;
   className?: string;
   baseMapType?: 'geoapify' | 'google-satellite' | 'google-hybrid';
+  initialLat?: number;
+  initialLng?: number;
+  initialZoom?: number;
+  autoClickOnLoad?: boolean; // Tự động click để load thông tin quy hoạch
+  showHanoiLandLayer?: boolean; // Hiển thị layer đất đai Hà Nội (chỉ dành cho khu vực Hà Nội)
 }
 
 /**
@@ -1443,7 +1448,12 @@ export default function HanoiPlanningMap({
   height = '500px', 
   showControls = true, 
   className = '',
-  baseMapType = 'google-hybrid'
+  baseMapType = 'google-hybrid',
+  initialLat,
+  initialLng,
+  initialZoom,
+  autoClickOnLoad = false,
+  showHanoiLandLayer
 }: HanoiPlanningMapProps) {
   const [isClient, setIsClient] = useState(false);
   const [geoapifyApiKey, setGeoapifyApiKey] = useState<string | null>(null);
@@ -1466,6 +1476,7 @@ export default function HanoiPlanningMap({
   const [activeMapType, setActiveMapType] = useState<string>('QH 2030');
   const planningOverlaysRef = useRef<L.DivOverlay[]>([]);
   const [selectedPlanningArea, setSelectedPlanningArea] = useState<any>(null);
+  const [isPlanningPanelMinimized, setIsPlanningPanelMinimized] = useState(false);
   const [layer1Url, setLayer1Url] = useState('https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/{z}/{x}/{y}.png');
   const [layer1Name, setLayer1Name] = useState('quy hoạch2030');
   const [geocodingData, setGeocodingData] = useState<any>(null);
@@ -1486,8 +1497,24 @@ export default function HanoiPlanningMap({
   // State to store current map-service data for clicked location
   const [currentMapServiceData, setCurrentMapServiceData] = useState<string | null>(null);
 
-  // Tọa độ trung tâm Hà Nội
-  const center: [number, number] = [21.0285, 105.8542];
+  // Function to detect if coordinates are in Hanoi area
+  const isInHanoi = (lat: number, lng: number): boolean => {
+    // Hanoi boundaries (approximate)
+    // Lat: 20.8 - 21.4 (North-South)
+    // Lng: 105.3 - 106.0 (East-West)
+    return lat >= 20.8 && lat <= 21.4 && lng >= 105.3 && lng <= 106.0;
+  };
+
+  // Tọa độ trung tâm (có thể override bằng props)
+  const center: [number, number] = [
+    initialLat || 21.0285, 
+    initialLng || 105.8542
+  ];
+
+  // Auto-detect if we should show Hanoi land layer based on coordinates
+  const shouldShowHanoiLandLayer = showHanoiLandLayer !== undefined 
+    ? showHanoiLandLayer 
+    : (initialLat && initialLng ? isInHanoi(initialLat, initialLng) : true);
 
   // Predefined map types for consistent usage
   const defaultMapTypes = [
@@ -1643,6 +1670,18 @@ export default function HanoiPlanningMap({
       setActiveMapType(defaultMapTypes[0].name);
     }
   }, [isClient]);
+
+  // Auto click on map if autoClickOnLoad is true and we have initial coordinates
+  useEffect(() => {
+    if (isClient && autoClickOnLoad && initialLat && initialLng && mapInstance && !selectedLocation) {
+      const timer = setTimeout(() => {
+        console.log('🎯 Auto-clicking map at initial coordinates:', initialLat, initialLng);
+        handleMapClick(initialLat, initialLng);
+      }, 2000); // Wait 2 seconds for map to fully load
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isClient, autoClickOnLoad, initialLat, initialLng, mapInstance, selectedLocation]);
 
   // Fetch geocoding data once when component mounts
   useEffect(() => {
@@ -2452,34 +2491,14 @@ export default function HanoiPlanningMap({
     );
   }
 
-  // Một số điểm demo trên bản đồ Hà Nội
-  const demoPoints = [
-    {
-      id: 1,
-      name: "Hồ Hoàn Kiếm",
-      position: [21.0285, 105.8542] as [number, number],
-      description: "Trung tâm lịch sử của Hà Nội"
-    },
-    {
-      id: 2,
-      name: "Khu vực Cầu Giấy",
-      position: [21.0337, 105.7981] as [number, number],
-      description: "Khu đô thị mới, trung tâm công nghệ"
-    },
-    {
-      id: 3,
-      name: "Khu vực Thanh Xuân",
-      position: [20.9876, 105.8125] as [number, number],
-      description: "Khu dân cư đông đúc"
-    }
-  ];
+  // Demo points removed - only show current property marker
   return (
     <div className={className}>
       {/* Map Container */}
       <div className={`map-container rounded-lg overflow-hidden relative ${isFullscreen ? 'fixed inset-0 z-[9999] bg-black' : ''}`} style={{ height: isFullscreen ? '100vh' : height }}>
         <MapContainer
           center={center}
-          zoom={15}
+          zoom={initialZoom || 15}
           minZoom={8}
           maxZoom={25}
           style={{ height: '100%', width: '100%' }}
@@ -2496,14 +2515,14 @@ export default function HanoiPlanningMap({
             onMapReady={setMapInstance}
           />
           
-          {/* Planning Overlay Manager */}
-          <PlanningOverlayManager 
+          {/* Planning Overlay Manager - Disabled to remove demo overlays */}
+          {/* <PlanningOverlayManager 
             map={mapInstance}
             showOverlay={showPlanningOverlay}
             planningData={planningData}
             overlaysRef={planningOverlaysRef}
             onAreaClick={setSelectedPlanningArea}
-          />
+          /> */}
           
           {/* Custom Zoom Control */}
           {showControls && (
@@ -2562,8 +2581,8 @@ export default function HanoiPlanningMap({
             />
           )}
           
-          {/* Layer 2: Bản đồ đất đai Hà Nội - Ở trên cùng */}
-          {showLayer2 && (
+          {/* Layer 2: Bản đồ đất đai Hà Nội - Chỉ hiển thị khi trong khu vực Hà Nội */}
+          {showLayer2 && shouldShowHanoiLandLayer && (
             <TileLayer
             url="https://s3-hn-2.cloud.cmctelecom.vn/guland7/land/ha-noi/{z}/{x}/{y}.png"
             attribution='&copy; Bản đồ đất đai Hà Nội'
@@ -2579,6 +2598,21 @@ export default function HanoiPlanningMap({
           {/* Simple marker without popup */}
           {selectedLocation && (
             <Marker position={selectedLocation}>
+            </Marker>
+          )}
+
+          {/* Initial position marker (nếu có và khác với selectedLocation) */}
+          {initialLat && initialLng && !selectedLocation && (
+            <Marker position={[initialLat, initialLng]}>
+              <Popup>
+                <div className="text-center py-2">
+                  <p className="text-gray-700 font-medium text-sm">Vị trí thẩm định</p>
+                  <p className="text-gray-600 text-xs">
+                    {initialLat.toFixed(4)}, {initialLng.toFixed(4)}
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">Click vào bản đồ để xem thông tin quy hoạch</p>
+                </div>
+              </Popup>
             </Marker>
           )}
 
@@ -2605,20 +2639,7 @@ export default function HanoiPlanningMap({
               </Popup>
             </Polygon>
           )}
-          {/* Các marker demo */}
-          {demoPoints.map((point) => (
-            <Marker key={point.id} position={point.position}>
-              <Popup>
-                <div className="p-2">
-                  <h3 className="font-semibold text-lg">{point.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{point.description}</p>
-                  <div className="mt-2 text-xs text-gray-500">
-                    <p>Tọa độ: {point.position[0]}, {point.position[1]}</p>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          {/* Demo markers removed - only show current property marker */}
         </MapContainer>
         
         {/* Address Search Bar - Embedded in top-left corner */}
@@ -2953,7 +2974,7 @@ export default function HanoiPlanningMap({
                       </div>
                     )}
                     
-                    {showLayer2 && (
+                    {showLayer2 && shouldShowHanoiLandLayer && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs w-8">ĐĐ:</span>
                         <input
@@ -2966,6 +2987,17 @@ export default function HanoiPlanningMap({
                           className="flex-1 h-1"
                         />
                         <span className="text-xs w-8">{Math.round(layer2Opacity * 100)}%</span>
+                      </div>
+                    )}
+                    {showLayer2 && !shouldShowHanoiLandLayer && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-8 text-gray-400">ĐĐ:</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-1 relative">
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs text-gray-400">Chỉ dành cho HN</span>
+                          </div>
+                        </div>
+                        <span className="text-xs w-8 text-gray-400">N/A</span>
                       </div>
                     )}
                   </div>
@@ -3118,52 +3150,76 @@ export default function HanoiPlanningMap({
 
         {/* Compact Planning Info Panel - Overlay inside map */}
         {(selectedLocation || isLoading || planningData) && (
-          <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border overflow-hidden max-w-md w-11/12 z-[1000]">
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+          <div className={`absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border overflow-hidden z-[1000] transition-all duration-300 ${
+            isPlanningPanelMinimized 
+              ? 'max-w-xs w-80' 
+              : 'max-w-sm w-96'
+          }`}>
+            <div className="flex items-center justify-between p-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">📍 Thông tin quy hoạch</span>
+                <span className="text-xs font-medium">📍 Thông tin quy hoạch</span>
                 {isLoading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
                 )}
               </div>
-              <button
-                onClick={() => {
-                  setSelectedLocation(null);
-                  setPlanningData(null);
-                  setError(null);
-                }}
-                className="text-white hover:bg-white hover:bg-opacity-20 p-1 rounded transition-colors"
-                title="Đóng"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsPlanningPanelMinimized(!isPlanningPanelMinimized)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 p-1 rounded transition-colors"
+                  title={isPlanningPanelMinimized ? "Mở rộng" : "Thu nhỏ"}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isPlanningPanelMinimized ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                    )}
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedLocation(null);
+                    setPlanningData(null);
+                    setError(null);
+                    setIsPlanningPanelMinimized(false);
+                  }}
+                  className="text-white hover:bg-white hover:bg-opacity-20 p-1 rounded transition-colors"
+                  title="Đóng"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  </button>
+              </div>
             </div>
 
-            <div className="p-3">
-              {isLoading ? (
-                <div className="flex items-center gap-2 text-blue-600">
-                  <span className="text-sm">Đang tải thông tin...</span>
-                </div>
-              ) : error ? (
-                <div className="text-red-600 text-sm">
-                  <p className="font-medium">Lỗi:</p>
-                  <p>{error}</p>
-                </div>
-              ) : planningData?.data ? (
-                <PlanningInfoCompact 
-                  planningData={planningData}
-                  selectedLocation={selectedLocation}
-                  onLayerSwitch={handleLayerSwitch}
-                />
-              ) : selectedLocation ? (
-                <div className="text-gray-600 text-sm">
-                  <p>Tọa độ: {selectedLocation[0].toFixed(6)}, {selectedLocation[1].toFixed(6)}</p>
-                  <p className="text-xs text-gray-500 mt-1">Chưa có dữ liệu quy hoạch</p>
-                </div>
-              ) : null}
-            </div>
+            {!isPlanningPanelMinimized && (
+              <div className="p-2">
+                {isLoading ? (
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <span className="text-xs">Đang tải thông tin...</span>
+                  </div>
+                ) : error ? (
+                  <div className="text-red-600 text-xs">
+                    <p className="font-medium">Lỗi:</p>
+                    <p>{error}</p>
+                  </div>
+                ) : planningData?.data ? (
+                  <div className="text-xs">
+                    <PlanningInfoCompact 
+                      planningData={planningData}
+                      selectedLocation={selectedLocation}
+                      onLayerSwitch={handleLayerSwitch}
+                    />
+                  </div>
+                ) : selectedLocation ? (
+                  <div className="text-gray-600 text-xs">
+                    <p>Tọa độ: {selectedLocation[0].toFixed(4)}, {selectedLocation[1].toFixed(4)}</p>
+                    <p className="text-xs text-gray-500 mt-1">Chưa có dữ liệu quy hoạch</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </div>

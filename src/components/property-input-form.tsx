@@ -268,6 +268,9 @@ export function PropertyInputForm({
         },
         auth_token: authToken,
       };
+      
+      // Debug logging for payload
+      console.log('📤 Sending payload:', payload);
 
       const response = await fetch('/api/complete-flow', {
         method: 'POST',
@@ -282,22 +285,27 @@ export function PropertyInputForm({
       }
 
       const result = await response.json();
+      
+      // Debug logging
+      console.log('🔍 API Response:', result);
+      console.log('🔍 AI Valuation exists:', !!result.ai_valuation);
+      console.log('🔍 Error:', result.error);
 
       if (result.success) {
-        // Check if AI valuation failed
+        // Check if there's an explicit error message from the API
         if (result.error) {
           setError(result.error);
           toast({
-            title: "❌ Lỗi AI",
+            title: "❌ Lỗi API",
             description: result.error,
             variant: "destructive",
           });
           return;
         }
         
-        // Check if AI valuation is missing or failed
-        if (!result.ai_valuation?.success) {
-          const aiError = result.ai_valuation?.error || 'AI Valuation failed';
+        // Check if AI valuation data exists (new API structure doesn't use ai_valuation.success)
+        if (!result.ai_valuation) {
+          const aiError = 'AI Valuation không thành công - vui lòng thử lại';
           setError(aiError);
           toast({
             title: "❌ Lỗi định giá AI",
@@ -315,6 +323,7 @@ export function PropertyInputForm({
           description: "Phân tích AI hoàn tất",
         });
         
+        // Show warning if using mock data
         if (result.error && result.error.includes('mock')) {
           toast({
             title: "⚠️ Thông báo",
@@ -331,8 +340,11 @@ export function PropertyInputForm({
         });
       }
     } catch (error) {
-      setError('Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.');
-      console.error('Valuation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setError(`Đã xảy ra lỗi không mong muốn: ${errorMessage}`);
+      console.error('🚨 Valuation error:', error);
+      console.error('🚨 Error type:', typeof error);
+      console.error('🚨 Error details:', error);
     }
     
     setIsLoading(false);
