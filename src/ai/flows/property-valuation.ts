@@ -134,9 +134,9 @@ function calculateConstructionPrice(input: PropertyValuationRangeInput) {
   const houseAge = currentYear - (yearBuilt || currentYear);
   let wearCoef = 1.0;
   if (houseAge < 3) {
-    wearCoef = 0.1;
-  } else if (houseAge < 5) {
     wearCoef = 0.07;
+  } else if (houseAge < 5) {
+    wearCoef = 0.05;
   } else if (houseAge < 10) {
     wearCoef = 0.02;
   } else if (houseAge < 20) {
