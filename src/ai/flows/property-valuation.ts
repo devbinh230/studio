@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { number } from 'zod';
+// import { number } from 'zod';
 
 const PropertyValuationRangeInputSchema = z.object({
   address: z.string().describe('Địa chỉ chi tiết của bất động sản (có thể để trống nếu đã cung cấp city/district/ward).').optional(),
@@ -158,7 +158,7 @@ function calculateConstructionPrice(input: PropertyValuationRangeInput) {
     toiletCoef = -0.02;
   }
   // Construction price
-  const priceHouse = totalFloorArea * (1 + unitPrice + wearCoef + roomCoef + toiletCoef);
+  const priceHouse = totalFloorArea * unitPrice * (1 + wearCoef + roomCoef + toiletCoef);
   return priceHouse;
 }
 
@@ -179,7 +179,7 @@ function calculateReasonableValue(input: PropertyValuationRangeInput): number {
   
   const { laneCoef, legalCoef, widthCoef, cornerCoef } = calculateCoefficients(input);
   
-  const reasonableValue = basePrice * (1+laneCoef + legalCoef+ widthCoef + cornerCoef);
+  const reasonableValue = basePrice * (1+ laneCoef + legalCoef+ widthCoef + cornerCoef);
    
   return reasonableValue;
 }
