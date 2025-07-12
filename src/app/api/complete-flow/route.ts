@@ -24,9 +24,12 @@ interface PropertyDetails {
   bathRoom?: number;
   legal?: string;
   yearBuilt?: number;
+  alleyType?: string;
+  houseDirection?: string;
   utilities?: any;
   strengths?: any;
   weaknesses?: any;
+  soShape?: string;
 }
           
 export async function POST(request: NextRequest) {
@@ -178,6 +181,9 @@ export async function POST(request: NextRequest) {
       bathRoom: 2,
       legal: 'pink_book',
       yearBuilt: 2015,
+      alleyType: 'thong',
+      houseDirection: 'nam',
+      
     };
 
     const mergedDetails = { ...defaultDetails, ...property_details };
@@ -202,6 +208,9 @@ export async function POST(request: NextRequest) {
       storyNumber: mergedDetails.storyNumber,
       type: mergedDetails.type,
       yearBuilt: mergedDetails.yearBuilt,
+      alleyType: mergedDetails.alleyType,
+      houseDirection: mergedDetails.houseDirection,
+      soShape: mergedDetails.soShape,
     };
 
     result.valuation_payload = valuationPayload;

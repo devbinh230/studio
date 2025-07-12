@@ -16,32 +16,79 @@ interface PerplexityResponse {
 /**
  * Gọi Perplexity AI API để search thông tin bất động sản
  */
-export async function searchRealEstateData(location: string, parsedAddress?: any): Promise<string> {
+// Tiềm kiếm cùng đường, diện tích tương tự, vị trí nhà(hẻm, phố)
+export async function searchRealEstateData(location: string, parsedAddress?: any, propertyDetails?: any, streetName?: string): Promise<string> {
   try {
-    const currentYear = new Date().getFullYear();
-    const searchQuery = `Giá bất động sản tại ${location} và biến động tại năm ${currentYear}`;
+    console.log('🔍 searchRealEstateData called with:', {
+      location,
+      streetName,
+      propertyType: propertyDetails?.type,
+      landArea: propertyDetails?.landArea
+    });
     
+    const currentYear = new Date().getFullYear();
+    // Lấy thông tin chi tiết
+    const street = streetName || parsedAddress?.street || '';
+    const ward = parsedAddress?.ward || '';
+    const district = parsedAddress?.district || '';
+    const city = parsedAddress?.city || '';
+    const landArea = propertyDetails?.landArea || '';
+    const type = propertyDetails?.type || '';
+    const alleyType = propertyDetails?.alleyType || '';
+    const laneWidth = propertyDetails?.laneWidth || '';
+
+    // Map property type to Vietnamese description
+    const getPropertyTypeDescription = (type: string): string => {
+      const typeMap: Record<string, string> = {
+        'apartment': 'chung_cu',
+        'lane_house': 'nha_hem_ngo', 
+        'town_house': 'nha_mat_pho',
+        'land': 'ban_dat',
+        'villa': 'biet_thu_lien_ke',
+        'NORMAL': 'nha_mat_pho'
+      };
+      return typeMap[type] || type;
+    };
+
+    let userPrompt = `Tìm kiếm các bất động sản rao bán trên các website uy tín tại: Batdongsanonline.vn,  Batdongsan.com.vn, Alonhadat.com.vn,Homedy.com`;
+    if (street) userPrompt += `\n- Đường: ${street}`;
+    if (ward) userPrompt += `\n- Phường: ${ward}`;
+    if (district) userPrompt += `\n- Quận: ${district}`;
+    if (city) userPrompt += `\n- Thành phố: ${city}`;
+    if (type) userPrompt += `\n- Loại bất động sản: ${getPropertyTypeDescription(type)}`;
+    if (landArea) userPrompt += `\n- Diện tích: khoảng ${landArea} m2`;
+    if (type || alleyType || laneWidth) {
+      userPrompt += `\n- Vị trí: `;
+      if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
+      if (alleyType) userPrompt += ` (${alleyType}`;
+      if (alleyType && laneWidth) userPrompt += ", ";
+      if (laneWidth) userPrompt += `lộ giới ${laneWidth}m`;
+      if (alleyType) userPrompt += ")";
+    }
+    userPrompt += `\nTìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
+
     const headers = new Headers();
     headers.append("Authorization", `Bearer ${getPerplexityApiKey()}`);
     headers.append("Content-Type", "application/json");
-
+    
+    console.warn(`User promt: ${userPrompt}`);
     const requestBody = JSON.stringify({
-      "model": "sonar-pro",
+      "model": "pplx-o3",
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia về bất động sản, nhiều năm kinh nghiệm trong thẩm định giá. Luôn chú ý và trả lời trọng tâm, ngắn gọn về các thông tin về giá, xu hướng thị trường và các dự án phát triển."
+          "content": "Bạn là chuyên gia bất động sản, trả lời ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON chuẩn với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link (nếu có). Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
         },
         {
           "role": "user",
-          "content": searchQuery
+          "content": userPrompt
         }
       ],
       "max_tokens": 500,
       "temperature": 0.2
     });
 
-    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+    const response = await fetch("http://47.84.56.246:8080/v1/chat/completions", {
       method: "POST",
       headers: headers,
       body: requestBody,

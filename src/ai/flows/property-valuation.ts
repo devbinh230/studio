@@ -36,6 +36,9 @@ const PropertyValuationRangeInputSchema = z.object({
   price_gov: z.string().describe('Dữ liệu giá bất động sản nhà nước').optional(),
   house_direction: z.string().describe('Hướng nhà').optional(),
   legal: z.string().describe('Loại hợp đồng (contract, white_book, pink_book, red_book).').optional(),
+  alleyType: z.string().describe('Loại ngõ (thong: ngõ thông, cut: ngõ cụt).').optional(),
+  houseDirection: z.string().describe('Hướng nhà (dong, tay, nam, bac).').optional(),
+  soShape: z.string().describe('Hình dạng lô đất').optional(),
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
@@ -56,10 +59,55 @@ function calculateCoefficients(input: PropertyValuationRangeInput) {
     laneCoef = 0.04; // car_avoid
   } else if (laneWidth >= 3) {
     laneCoef = 0.01; // car_lane
-  } else if (laneWidth > 0) {
+  } else if (laneWidth > 0) { //  xe máy tránh
     laneCoef = -0.03; // small_lane
   }
 
+  // Alley type coefficient
+  let alleyCoef = 0.0;
+  if (input.alleyType === 'thong') {
+    alleyCoef = 0.03; // Ngõ thông có giá cao hơn
+  } else if (input.alleyType === 'cut') {
+    alleyCoef = -0.02; // Ngõ cụt có giá thấp hơn
+  }
+
+  // House direction coefficient
+  let directionCoef = 0.0;
+  switch (input.houseDirection) {
+    case 'nam':
+      directionCoef = 0.03; // Hướng Nam tốt nhất
+      break;
+    case 'dong':
+      directionCoef = 0.01; // Hướng Đông tốt
+      break;
+    case 'bac':
+      directionCoef = -0.02; // Hướng Tây kém hơn
+      break;
+    case 'tay':
+      directionCoef = -0.05; // Hướng Bắc kém nhất
+      break;
+    default:
+      directionCoef = 0.0;
+  }
+
+  // Hình dạng lô đất 
+  let bookCoef = 0.0;
+  switch (input.soShape) {
+    case 'vuong':
+      bookCoef = 0.0; // sổ vuông chuẩn
+      break;
+    case 'no_hau':
+      bookCoef = 0.04; // no hau
+      break;
+    case 'thop_hau':
+      bookCoef = -0.03; // thop hau
+      break;
+    case 'phuc_tap':
+      bookCoef = -0.07; // 
+      break;
+    default:
+      bookCoef = 0.0;
+  }
 
   // Legal coefficient (mapping theo legal type)
   let legalCoef = 0.0;
@@ -107,7 +155,7 @@ switch (facadeCount) {
 }
 
 
-  return { laneCoef, legalCoef, widthCoef, cornerCoef };
+  return { laneCoef, legalCoef, widthCoef, cornerCoef, alleyCoef, directionCoef, bookCoef };
 }
 
 // Helper function to calculate construction price (from price.py)
@@ -162,24 +210,60 @@ function calculateConstructionPrice(input: PropertyValuationRangeInput) {
   return priceHouse;
 }
 
-// Helper function to extract market price from marketData
-function extractMarketPrice(marketData: string): number {
+// Helper function to extract market price from searchData first, then marketData
+function extractMarketPrice(marketData: string, searchData?: string, lotSize?: number): number {
+  // First try to extract from searchData
+  if (searchData) {
+    // Try to parse JSON from searchData first
+    try {
+      const jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/);
+      if (jsonMatch) {
+        const jsonData = JSON.parse(jsonMatch[0]);
+        if (jsonData["giá trung bình"]) {
+          // Return the base price directly from searchData
+          return parseFloat(jsonData["giá trung bình"]);
+        }
+      }
+    } catch (e) {
+      console.log('Failed to parse JSON from searchData, trying regex patterns');
+    }
+
+    // Look for price patterns in searchData
+    const searchPricePatterns = [
+      /Giá trung bình:\s*([\d\.]+)\s*triệu VND\/m²/,
+      /giá trung bình[:\s]*([\d\.]+)\s*triệu/,
+      /giá[:\s]*([\d\.]+)\s*triệu/,
+      /([\d\.]+)\s*triệu.*m²/,
+      /([\d\.]+)\s*triệu.*m2/
+    ];
+    
+    for (const pattern of searchPricePatterns) {
+      const match = searchData.match(pattern);
+      if (match) {
+        return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
+      }
+    }
+  }
+  
+  // Fall back to marketData if no price found in searchData
   const match = marketData.match(/Giá trung bình:\s*([\d\.]+)\s*triệu VND\/m²/);
   if (match) {
     return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
   }
+  
   return 0;
 }
 
 // Calculate reasonableValue using price.py logic
 function calculateReasonableValue(input: PropertyValuationRangeInput): number {
-  const baseMarketPrice = extractMarketPrice(input.marketData);
+  const baseMarketPrice = extractMarketPrice(input.marketData, input.searchData, input.lotSize);
+  // const baseMarketPrice = baseMarketPrice_mean * 0.97
   const lotSize = input.lotSize || 0;
   const basePrice = baseMarketPrice * lotSize;
   
-  const { laneCoef, legalCoef, widthCoef, cornerCoef } = calculateCoefficients(input);
+  const { laneCoef, legalCoef, widthCoef, cornerCoef, alleyCoef, directionCoef, bookCoef } = calculateCoefficients(input);
   
-  const reasonableValue = basePrice * (1+ laneCoef + legalCoef+ widthCoef + cornerCoef);
+  const reasonableValue = basePrice * (1 + laneCoef + legalCoef+ widthCoef + cornerCoef + alleyCoef + directionCoef + bookCoef);
    
   return reasonableValue;
 }
@@ -207,6 +291,8 @@ const prompt = ai.definePrompt({
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})  
 - Loại: {{{type}}}  
 - Ngõ trước nhà: {{{laneWidth}}} m
+- Loại ngõ: {{{alleyType}}} (thong: ngõ thông, cut: ngõ cụt)
+- Hướng nhà: {{{houseDirection}}} (dong: Đông, tay: Tây, nam: Nam, bac: Bắc)
 - Diện tích đất: {{{lotSize}}} m²  
 - Diện tích sàn: {{{size}}} m²  
 - Tiện ích xung quanh: {{{amenities}}}
@@ -217,7 +303,7 @@ VT2: Thửa đất có ít nhất một mặt giáp ngõ (ngách/hẻm), với m
 VT3: Giáp ngõ có mặt cắt từ 2m đến < 3,5m (tính từ chỉ giới hè đường).
 VT4: Giáp ngõ có mặt cắt < 2m (tính từ chỉ giới hè đường). Vị trí kém thuận lợi nhất.
 Vị trí sau luôn có điều kiện kém hơn vị trí liền trước.
-Đất có nhà, bổ sung thêm thông tin:
+Đất có nhà, bổ sung thông tin:
 - Số phòng ngủ: {{{bedrooms}}}  
 - Số phòng tắm: {{{bathrooms}}}  
 - Số tầng: {{{storyNumber}}}  

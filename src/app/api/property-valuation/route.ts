@@ -201,28 +201,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
 
-    // Step 2.5: Get search data from internet
-    console.log('\n🔍 STEP 2.5: Getting search data from internet...');
-    const step2_5Start = Date.now();
-
-    const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
-    let searchData = '';
-    
-    try {
-      searchData = await searchRealEstateData(locationString, parsedAddress);
-      if (searchData) {
-        console.log('✅ Search data received from internet');
-      } else {
-        console.log('⚠️  No relevant search data found');
-        searchData = 'Không có dữ liệu search phù hợp từ internet.';
-      }
-    } catch (error) {
-      console.log('⚠️  Search API failed, using fallback');
-      searchData = 'Không thể truy cập dữ liệu search từ internet.';
-    }
-
-    console.log(`⏱️  Step 2.5 time: ${Date.now() - step2_5Start}ms`);
-
     // Step 1.5: Reverse geocode to get street name
     console.log('\n🛣️ STEP 1.5: Reverse geocoding to get street name...');
     let streetName = '';
@@ -239,6 +217,40 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.log('⚠️  Nominatim error:', err);
     }
+
+    // Step 2.5: Get search data from internet
+    console.log('\n🔍 STEP 2.5: Getting search data from internet...');
+    const step2_5Start = Date.now();
+
+    const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
+    let searchData = '';
+    
+    try {
+      console.log('🔍 Starting search with params:', {
+        locationString,
+        streetName,
+        propertyType: property_details?.type,
+        landArea: property_details?.landArea
+      });
+      
+      searchData = await searchRealEstateData(locationString, parsedAddress, property_details, streetName);
+      if (searchData) {
+        console.log('✅ Search data received from internet');
+        console.log('📄 Search data length:', searchData.length);
+      } else {
+        console.log('⚠️  No relevant search data found');
+        searchData = 'Không có dữ liệu search phù hợp từ internet.';
+      }
+    } catch (error) {
+      console.log('⚠️  Search API failed, using fallback');
+      console.error('Search API error details:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
+      searchData = 'Không thể truy cập dữ liệu search từ internet.';
+    }
+
+    console.log(`⏱️  Step 2.5 time: ${Date.now() - step2_5Start}ms`);
 
     // Step 1.6: Find price_gov from output.json
     function normalizeStreetName(name: string): string {
@@ -278,7 +290,7 @@ export async function POST(request: NextRequest) {
           const found = streetMatches.find((item: any) => {
             const districtNorm = normalizeDistrictName(item['Quận']);
             // Log for debug
-            console.log('So sánh quận:', {queryDistrictNorm, districtNorm});
+            // console.log('So sánh quận:', {queryDistrictNorm, districtNorm});
             return districtNorm === queryDistrictNorm;
           });
           if (found) {

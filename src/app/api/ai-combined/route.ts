@@ -13,6 +13,9 @@ interface PropertyDetails {
   bathRoom?: number;
   legal?: string;
   yearBuilt?: number;
+  alleyType?: string;
+  houseDirection?: string;
+  soShape?: string;
   utilities?: any;
   amenities?: string[];
   combinedAmenities?: string[];
@@ -170,6 +173,9 @@ export async function POST(request: NextRequest) {
       bathRoom: 2,
       legal: 'pink_book',
       yearBuilt: 2015,
+      alleyType: 'thong',
+      houseDirection: 'nam',
+      soShape: 'vuong',
     };
 
     const mergedDetails = { ...defaultDetails, ...property_details };
@@ -199,6 +205,9 @@ export async function POST(request: NextRequest) {
       marketData: marketData,
       searchData: 'Không có dữ liệu search từ internet.',
       price_gov:'Dữ liệu giá đất nhà nước',
+      alleyType: mergedDetails.alleyType || 'thong',
+      houseDirection: mergedDetails.houseDirection || 'nam',
+      soShape: mergedDetails.soShape || 'vuong'
     };
 
     console.log('📊 Shared AI Input prepared');
