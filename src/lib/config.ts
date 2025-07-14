@@ -2,22 +2,28 @@
 export const config = {
   // Proxy Server Configuration (Primary AI provider)
   proxy: {
-    baseUrl: process.env.PROXY_SERVER_URL,
-    apiKey: process.env.PROXY_SERVER_API_KEY,
-    timeout: 15000, // 15 seconds timeout
-    enabled: process.env.PROXY_SERVER_ENABLED === 'true',
+    // Support both naming conventions: PROXY_SERVER_* (preferred) or AI_SERVER_PROXY_* (legacy)
+    baseUrl: process.env.PROXY_SERVER_URL || process.env.AI_SERVER_PROXY_URL,
+    // Strip optional "Bearer " prefix if present in env value to avoid double prefixing later
+    apiKey: (() => {
+      const raw = process.env.PROXY_SERVER_API_KEY || process.env.AI_SERVER_PROXY_API_KEY || '';
+      return raw.startsWith('Bearer ') ? raw.replace(/^Bearer\s+/i, '') : raw;
+    })(),
+    timeout: 120000, // 15 seconds timeout
+    // Treat undefined as enabled (default true) unless explicitly set to 'false'
+    enabled: process.env.PROXY_SERVER_ENABLED ? process.env.PROXY_SERVER_ENABLED === 'true' : true,
     model: process.env.PROXY_SERVER_MODEL || 'o3', // Default model for proxy
   },
 
   // Resta.vn API Configuration
   resta: {
-    // Current token (used in client components and API routes)
-    authToken: process.env.RESTA_AUTH_TOKEN
+    // Accept both server-side and public token names for flexibility
+    authToken: process.env.RESTA_AUTH_TOKEN || process.env.NEXT_PUBLIC_RESTA_AUTH_TOKEN
   },
 
   // Geoapify API Configuration
   geoapify: {
-    apiKey: process.env.GEOAPIFY_API_KEY
+    apiKey: process.env.GEOAPIFY_API_KEY || process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
   },
 
   // Perplexity AI API Configuration (Fallback)

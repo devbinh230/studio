@@ -212,31 +212,74 @@ function calculateConstructionPrice(input: PropertyValuationRangeInput) {
 
 // Helper function to extract market price from searchData first, then marketData
 function extractMarketPrice(marketData: string, searchData?: string, lotSize?: number): number {
-  // First try to extract from searchData
-  if (searchData) {
-    // Try to parse JSON from searchData first
-    try {
-      const jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/);
-      if (jsonMatch) {
-        const jsonData = JSON.parse(jsonMatch[0]);
-        if (jsonData["giá trung bình"]) {
-          // Return the base price directly from searchData
-          return parseFloat(jsonData["giá trung bình"]);
+  // Helper to recursively search for average price value in any JSON object
+  const findAvgPrice = (obj: any): number | null => {
+    if (obj && typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj)) {
+        const key = k.toLowerCase();
+        if (typeof v === 'number' && /giá|price/.test(key) && /(trung bình|average)/.test(key)) {
+          return v; // already numeric (assumed VND/m2)
+        }
+        if (typeof v === 'string') {
+          const numMatch = v.match(/([\d\.]+)(?=\s*(triệu|ty|tỷ|tr|vnđ|vnd)?)/i);
+          if (numMatch) {
+            return parseFloat(numMatch[1]) * (v.includes('triệu') ? 1_000_000 : 1);
+          }
+        }
+        if (typeof v === 'object') {
+          const nested = findAvgPrice(v);
+          if (nested) return nested;
         }
       }
-    } catch (e) {
-      console.log('Failed to parse JSON from searchData, trying regex patterns');
+    }
+    return null;
+  };
+
+  // First try to extract from searchData
+  if (searchData) {
+    // 1) Look for fenced code block with json language
+    const fenceRegexes = [
+      /```json[\s\S]*?```/i,
+      /```[\s\S]*?```/ // generic
+    ];
+    for (const reg of fenceRegexes) {
+      const fenceMatch = searchData.match(reg);
+      if (fenceMatch) {
+        // Remove the backticks and optional language tag
+        const jsonText = fenceMatch[0].replace(/```json/i, '').replace(/```/g, '').trim();
+        try {
+          const parsed = JSON.parse(jsonText);
+          const avg = findAvgPrice(parsed);
+          if (avg && !isNaN(avg)) {
+            return avg; // Already VND/m2 or converted in helper
+          }
+        } catch {
+          // ignore parse error, continue
+        }
+      }
     }
 
-    // Look for price patterns in searchData
+    // 2) Fallback – try old brace matching method
+    try {
+      const jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/i);
+      if (jsonMatch) {
+        const jsonData = JSON.parse(jsonMatch[0]);
+        const avg = findAvgPrice(jsonData);
+        if (avg && !isNaN(avg)) {
+          return avg;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3) Regex scan for price patterns in plain text
     const searchPricePatterns = [
-      /Giá trung bình:\s*([\d\.]+)\s*triệu VND\/m²/,
-      /giá trung bình[:\s]*([\d\.]+)\s*triệu/,
-      /giá[:\s]*([\d\.]+)\s*triệu/,
-      /([\d\.]+)\s*triệu.*m²/,
-      /([\d\.]+)\s*triệu.*m2/
+      /Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*(?:VND|VNĐ)?\/?m²?/i,
+      /average price[:\s]*([\d\.]+)\s*vnd\s*\/\s*m2/i,
+      /giá[:\s]*([\d\.]+)\s*triệu/i,
+      /([\d\.]+)\s*triệu.*m²?/i,
     ];
-    
     for (const pattern of searchPricePatterns) {
       const match = searchData.match(pattern);
       if (match) {
@@ -246,7 +289,7 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
   }
   
   // Fall back to marketData if no price found in searchData
-  const match = marketData.match(/Giá trung bình:\s*([\d\.]+)\s*triệu VND\/m²/);
+  const match = marketData.match(/Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*VND\/m²/i);
   if (match) {
     return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
   }

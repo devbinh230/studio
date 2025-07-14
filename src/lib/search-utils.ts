@@ -92,7 +92,7 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia bất động sản, trả lời ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON chuẩn với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link (nếu có). Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
+          "content": "Bạn là chuyên gia thẩm định giá bất động sản, output ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link. Các dữ liệu cần được xem xét về yếu tố thời gian trong năm 2025 tháng 7. Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
         },
         {
           "role": "user",
@@ -114,16 +114,57 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
     if (response.ok) {
       const data: AIResponse = await response.json();
       
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        console.log('✅ Proxy Server API successful');
+      // Enhanced logging to debug response structure
+      console.log('🔍 DEBUG: Proxy Server response structure:', {
+        hasChoices: !!data.choices,
+        choicesLength: data.choices?.length || 0,
+        firstChoiceKeys: data.choices?.[0] ? Object.keys(data.choices[0]) : [],
+        firstMessageKeys: data.choices?.[0]?.message ? Object.keys(data.choices[0].message) : [],
+        contentLength: data.choices?.[0]?.message?.content?.length || 0,
+        contentPreview: data.choices?.[0]?.message?.content?.substring(0, 100) || 'NO CONTENT'
+      });
+      
+      // Primary validation path
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        const content = data.choices[0].message.content.trim();
+        if (content.length > 0) {
+          console.log('✅ Proxy Server API successful');
+          return {
+            content: content,
+            provider: 'proxy',
+            success: true
+          };
+        } else {
+          console.warn('⚠️  Proxy Server returned empty content');
+        }
+      }
+      
+      // Fallback: try to extract content from different response formats
+      console.log('🔄 Trying alternative response format extraction...');
+      
+      // Try direct content field
+      if ((data as any).content) {
+        console.log('✅ Found content in direct field');
         return {
-          content: data.choices[0].message.content,
+          content: (data as any).content,
           provider: 'proxy',
           success: true
         };
-      } else {
-        throw new Error('Invalid response format from proxy server');
       }
+      
+      // Try first choice without message wrapper
+      if (data.choices && data.choices[0] && typeof data.choices[0] === 'string') {
+        console.log('✅ Found content in first choice string');
+        return {
+          content: data.choices[0] as string,
+          provider: 'proxy',
+          success: true
+        };
+      }
+      
+      // Last resort: log full response and throw error
+      console.error('❌ Invalid response format from proxy server:', JSON.stringify(data, null, 2));
+      throw new Error(`Invalid response format from proxy server: ${JSON.stringify(data)}`);
     } else {
       const errorText = await response.text();
       throw new Error(`Proxy server returned ${response.status}: ${errorText}`);
@@ -159,7 +200,7 @@ async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult> 
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia bất động sản, trả lời ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON chuẩn với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link (nếu có). Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
+          "content": "Bạn là chuyên gia thẩm định giá bất động sản, output ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link. Các dữ liệu cần được xem xét về yếu tố thời gian trong năm 2025 tháng 7. Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
         },
         {
           "role": "user",
@@ -250,26 +291,22 @@ export async function searchRealEstateData(location: string, parsedAddress?: any
       return typeMap[type] || type;
     };
 
-    let userPrompt = `Tìm kiếm các bất động sản rao bán trên các website uy tín tại: Batdongsanonline.vn,  Batdongsan.com.vn, Alonhadat.com.vn,Homedy.com`;
-    if (street) userPrompt += `\n- Đường: ${street}`;
-    if (ward) userPrompt += `\n- Phường: ${ward}`;
-    if (district) userPrompt += `\n- Quận: ${district}`;
-    if (city) userPrompt += `\n- Thành phố: ${city}`;
-    if (type) userPrompt += `\n- Loại bất động sản: ${getPropertyTypeDescription(type)}`;
-    if (landArea) userPrompt += `\n- Diện tích: khoảng ${landArea} m2`;
-    if (type || alleyType || laneWidth) {
-      userPrompt += `\n- Vị trí: `;
-      if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
-      if (alleyType) userPrompt += ` (${alleyType}`;
-      if (alleyType && laneWidth) userPrompt += ", ";
-      if (laneWidth) userPrompt += `lộ giới ${laneWidth}m`;
-      if (alleyType) userPrompt += ")";
-    }
-    userPrompt += `\nTìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
+    // Format: tên đường + phường + quận + thành phố + loại bất động sản
+    let userPrompt = `Tìm kiếm các bất động sản `;
+    if (street) userPrompt += `${street} `;
+    if (ward) userPrompt += `${ward} `;
+    if (district) userPrompt += `${district} `;
+    if (city) userPrompt += `${city} `;
+    if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
+
+    if (landArea) userPrompt += ` diện tích khoảng ${landArea} m2`;
+
+    userPrompt += `. Tìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
 
     console.log(`🔍 Search prompt prepared (${userPrompt.length} characters)`);
 
     // Try Proxy Server first (Primary)
+    let primaryResult = null;
     if (providerStatus.proxy.available) {
       console.log('🚀 Trying primary provider: Proxy Server');
       const proxyResult = await callProxyServer(userPrompt);
@@ -278,13 +315,17 @@ export async function searchRealEstateData(location: string, parsedAddress?: any
         console.log('✅ Proxy Server successful, formatting response...');
         return formatAIResponse(proxyResult.content, location, parsedAddress, 'proxy');
       } else {
-        console.log('❌ Proxy Server failed, trying fallback...');
+        // Store result for potential retry, but continue to fallback
+        primaryResult = proxyResult;
+        const errMsg = proxyResult.error || 'Proxy Server call failed without specific error';
+        console.error(`❌ Proxy Server available but failed: ${errMsg}`);
+        console.log('🔄 Will try fallback provider...');
       }
     } else {
-      console.log('⚠️  Proxy Server not available, skipping to fallback');
+      console.log('⚠️  Proxy Server not available, considering fallback provider');
     }
 
-    // Fallback to Perplexity
+    // Try fallback when primary fails OR is not available
     if (providerStatus.perplexity.available) {
       console.log('🔄 Trying fallback provider: Perplexity');
       const perplexityResult = await callPerplexityAPI(userPrompt);
@@ -293,14 +334,21 @@ export async function searchRealEstateData(location: string, parsedAddress?: any
         console.log('✅ Perplexity successful, formatting response...');
         return formatAIResponse(perplexityResult.content, location, parsedAddress, 'perplexity');
       } else {
-        console.log('❌ Perplexity also failed');
+        console.error('❌ Perplexity failed as fallback');
       }
     } else {
-      console.log('⚠️  Perplexity not available');
+      console.log('⚠️  No fallback providers available');
     }
 
-    // All providers failed
-    console.warn('❌ All AI providers failed');
+    // If we get here, all providers failed
+    // But check if primary provider had some content we can use
+    if (primaryResult && primaryResult.content) {
+      console.log('⚡ Using partial data from failed primary provider as last resort...');
+      return formatAIResponse(primaryResult.content, location, parsedAddress, 'proxy-partial');
+    }
+
+    // All providers failed or unavailable
+    console.warn('❌ All AI providers failed or were unavailable');
     return '';
 
   } catch (error) {
@@ -430,5 +478,3 @@ function getCityProvinceKeywords(parsedAddress?: any): string[] {
   
   return keywords;
 }
-
- 
