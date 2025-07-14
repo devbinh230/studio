@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
     let parsedAddress;
     let marketData = "Không có dữ liệu thị trường cho khu vực này.";
     let searchData = "Không có dữ liệu search từ internet.";
+    let price_gov = '';
 
     if (hasSharedData) {
       // Use shared data from complete-flow (OPTIMIZED PATH)
@@ -93,10 +94,12 @@ export async function POST(request: NextRequest) {
       parsedAddress = _shared_data.parsedAddress;
       marketData = _shared_data.marketData || marketData;
       searchData = _shared_data.searchData || searchData;
+      price_gov = _shared_data.price_gov || '';
       
       console.log(`✅ Using shared parsed address: ${parsedAddress.formatted_address || `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`}`);
       console.log(`✅ Using shared market data: ${marketData.length > 50 ? 'Available' : 'Not available'}`);
       console.log(`✅ Using shared search data: ${searchData.length > 50 ? 'Available' : 'Not available'}`);
+      console.log(`✅ Using shared price_gov: ${price_gov}`);
       console.log(`⏱️  Step 1 time: ${Date.now() - step1Start}ms`);
       
     } else {
@@ -237,7 +240,7 @@ export async function POST(request: NextRequest) {
       yearBuilt: mergedDetails.yearBuilt || 2015,
       marketData: marketData, // Use either shared or fetched data
       searchData: searchData, // Use either shared or fetched data
-      price_gov:'Dữ liệu giá đất nhà nước',
+      price_gov: price_gov,
       alleyType: mergedDetails.alleyType || 'thong',
       houseDirection: mergedDetails.houseDirection || 'nam',
       soShape: mergedDetails.soShape || 'vuong'

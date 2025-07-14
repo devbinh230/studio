@@ -311,8 +311,74 @@ function calculateReasonableValue(input: PropertyValuationRangeInput): number {
   return reasonableValue;
 }
 
+function getPriceGovPlace(input: PropertyValuationRangeInput): number {
+  if (!input.price_gov) {
+    console.log("No price_gov data");
+    return 0;
+  }
+
+  try {
+    const data = JSON.parse(input.price_gov);
+    console.log("Parsed price_gov data:", data);
+    
+    const parseNumber = (val: any): number => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+        // Remove dots and convert to number
+        const cleaned = val.replace(/\./g, '');
+        return cleaned ? parseInt(cleaned, 10) : 0;
+      }
+      return 0;
+    };
+
+    // Lấy giá theo VT dựa vào laneWidth
+    const laneWidth = input.laneWidth || 0;
+    console.log("Lane width:", laneWidth);
+    
+    // VT1: Mặt phố
+    // VT2: Ngõ >= 4.5m
+    // VT3: Ngõ 3m - <4.5m
+    // VT4: Ngõ <3m
+    let vtPrice = 0;
+    if (laneWidth >= 4.5) {
+      vtPrice = parseNumber(data['VT2']);
+      console.log("Using VT2 price:", data['VT2'], "->", vtPrice);
+    } else if (laneWidth >= 3) {
+      vtPrice = parseNumber(data['VT3']);
+      console.log("Using VT3 price:", data['VT3'], "->", vtPrice);
+    } else {
+      vtPrice = parseNumber(data['VT4']);
+      console.log("Using VT4 price:", data['VT4'], "->", vtPrice);
+    }
+
+    console.log("Final price_gov_place:", vtPrice);
+    return vtPrice;
+  } catch (error) {
+    console.error('Error parsing price_gov:', error);
+    return 0;
+  }
+}
+
 export async function propertyValuationRange(input: PropertyValuationRangeInput): Promise<PropertyValuationRangeOutput> {
-  return propertyValuationRangeFlow(input);
+  // Calculate reasonableValue and price_house using price.py logic
+  const reasonableValue = calculateReasonableValue(input);
+  const price_house = calculateConstructionPrice(input);
+  
+  // Calculate price_gov_place based on VT rules
+  const price_gov_place = getPriceGovPlace(input);
+  console.log("price_gov_place: ",price_gov_place)
+  // Prepare input for AI with calculated values
+  const aiInput: PropertyValuationRangeLLMInput = {
+    ...input,
+    reasonableValue,
+    price_house
+  };
+
+  const response = await prompt(aiInput);
+  if (!response.output) {
+    throw new Error('No output received from AI model');
+  }
+  return response.output;
 }
 
 // Schema mở rộng cho LLM input
@@ -342,9 +408,9 @@ const prompt = ai.definePrompt({
 - Giá nhà nước (Giá tham chiếu từ Nhà nước): {{{price_gov}}} VND/m²
 Chú thích về Giá nhà nước:
 VT1: Thửa đất của một chủ sử dụng có ít nhất một mặt giáp đường/phố có tên trong bảng giá ban hành kèm theo Quyết định. Vị trí thuận lợi nhất.
-VT2: Thửa đất có ít nhất một mặt giáp ngõ (ngách/hẻm), với mặt cắt ngõ ≥ 3,5m (tính từ chỉ giới hè đường đến mốc giới đầu tiên của thửa đất).
-VT3: Giáp ngõ có mặt cắt từ 2m đến < 3,5m (tính từ chỉ giới hè đường).
-VT4: Giáp ngõ có mặt cắt < 2m (tính từ chỉ giới hè đường). Vị trí kém thuận lợi nhất.
+VT2: Thửa đất có ít nhất một mặt giáp ngõ (ngách/hẻm), với mặt cắt ngõ ≥ 4,5m (tính từ chỉ giới hè đường đến mốc giới đầu tiên của thửa đất).
+VT3: Giáp ngõ có mặt cắt từ 3m đến < 4,5m (tính từ chỉ giới hè đường).
+VT4: Giáp ngõ có mặt cắt < 3m (tính từ chỉ giới hè đường). Vị trí kém thuận lợi nhất.
 Vị trí sau luôn có điều kiện kém hơn vị trí liền trước.
 Đất có nhà, bổ sung thông tin:
 - Số phòng ngủ: {{{bedrooms}}}  

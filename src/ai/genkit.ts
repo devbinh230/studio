@@ -1,7 +1,7 @@
 import { genkit, GenerationCommonConfigSchema } from 'genkit';
 import { ModelInfo } from 'genkit/model';
 import { googleAI } from '@genkit-ai/googleai';
-import openAI from 'genkitx-openai';
+// import openAI from 'genkitx-openai';
 
 // Custom model info for Perplexity Grok
 const perplexityGrokModelInfo: ModelInfo = {

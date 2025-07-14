@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDistanceAnalysis } from '@/lib/distance-utils';
 import { mergeDetailsWithUtilities } from '@/lib/utils';
 import { searchRealEstateData } from '@/lib/search-utils';
+import fs from 'fs';
+import path from 'path';
 
 // Helper function to format currency
 function formatCurrency(value: number) {
@@ -466,20 +468,75 @@ export async function POST(request: NextRequest) {
             console.log('⚠️  Nominatim timeout/error, proceeding without street name');
           }
 
+          // Add price_gov lookup logic
+          let price_gov = '';
+          if (streetName && parsedAddress.district) {
+            try {
+              const outputPath = path.join(process.cwd(), 'price_gov.json');
+              const outputData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+              
+              function normalizeStreetName(name: string): string {
+                if (!name) return '';
+                let n = name.toLowerCase().replace(/^(đường|pho|phố|duong|street)\s+/g, '');
+                n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
+                n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+                n = n.replace(/\s+/g, ' ').trim();
+                return n;
+              }
+
+              function normalizeDistrictName(name: string): string {
+                if (!name) return '';
+                let n = name.toLowerCase().replace(/^(quận|huyện|thành phố)\s+/g, '');
+                n = n.replace(/_/g, ' ');
+                n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
+                n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+                n = n.replace(/\s+/g, ' ').trim();
+                return n;
+              }
+
+              const queryNorm = normalizeStreetName(streetName);
+              const streetMatches = outputData.filter((item: any) => {
+                const streetNorm = normalizeStreetName(item['Đường']);
+                return (streetNorm === queryNorm || streetNorm.includes(queryNorm) || queryNorm.includes(streetNorm));
+              });
+
+              if (streetMatches.length > 0) {
+                const queryDistrictNorm = normalizeDistrictName(parsedAddress.district);
+                const found = streetMatches.find((item: any) => {
+                  const districtNorm = normalizeDistrictName(item['Quận']);
+                  return districtNorm === queryDistrictNorm;
+                });
+
+                if (found) {
+                  console.log('💰 Found price_gov object:', found);
+                  price_gov = JSON.stringify(found);
+                }
+              }
+            } catch (err) {
+              console.log('⚠️  Error reading price_gov.json:', err);
+            }
+          }
+
           const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
           const searchData = await searchRealEstateData(locationString, parsedAddress, mergedDetails, streetName);
           
           console.log('✅ [PARALLEL] Search data completed');
           return {
             type: 'search_data',
-            data: searchData || 'Không có dữ liệu search phù hợp từ internet.',
+            data: {
+              searchData: searchData || 'Không có dữ liệu search phù hợp từ internet.',
+              price_gov: price_gov
+            },
             success: true
           };
         } catch (error) {
           console.error('❌ [PARALLEL] Search data error:', error);
           return {
             type: 'search_data',
-            data: 'Không thể truy cập dữ liệu search từ internet.',
+            data: {
+              searchData: 'Không thể truy cập dữ liệu search từ internet.',
+              price_gov: ''
+            },
             success: false,
             error: `Search error: ${error instanceof Error ? error.message : 'Unknown error'}`
           };
@@ -496,6 +553,7 @@ export async function POST(request: NextRequest) {
     // Process parallel results and collect shared data
     let sharedSearchData = 'Không có dữ liệu search từ internet.';
     let sharedMarketData = 'Không có dữ liệu thị trường cho khu vực này.';
+    let sharedPriceGov = '';
 
     parallelResults.forEach((taskResult, index) => {
       if (taskResult.status === 'fulfilled') {
@@ -520,7 +578,12 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Distance Analysis: ${success ? 'Success' : 'Failed'}`);
             break;
           case 'search_data':
-            sharedSearchData = data;
+            if (data && typeof data === 'object') {
+              sharedSearchData = data.searchData;
+              sharedPriceGov = data.price_gov;
+            } else {
+              sharedSearchData = data;
+            }
             console.log(`✅ Search Data: ${success ? 'Success' : 'Failed'}`);
             break;
         }
@@ -556,9 +619,9 @@ export async function POST(request: NextRequest) {
         legal: mergedDetails.legal || 'contract',
         amenities: amenities,
         yearBuilt: mergedDetails.yearBuilt || 2015,
-        marketData: sharedMarketData, // Pre-fetched
-        searchData: sharedSearchData, // Pre-fetched 
-        price_gov: 'Dữ liệu giá đất nhà nước',
+        marketData: sharedMarketData,
+        searchData: sharedSearchData,
+        price_gov: sharedPriceGov,
         alleyType: mergedDetails.alleyType || 'thong',
         houseDirection: mergedDetails.houseDirection || 'nam',
         soShape: mergedDetails.soShape || 'vuong'
@@ -618,6 +681,7 @@ export async function POST(request: NextRequest) {
             parsedAddress,
             marketData: sharedMarketData,
             searchData: sharedSearchData,
+            price_gov: sharedPriceGov, // Pass the actual price_gov JSON string
             skip_data_fetching: true // Flag to skip duplicate API calls
           }
         }),
