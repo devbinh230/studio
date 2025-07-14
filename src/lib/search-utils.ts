@@ -88,7 +88,7 @@ export async function searchRealEstateData(location: string, parsedAddress?: any
       "temperature": 0.2
     });
 
-    const response = await fetch("http://47.84.56.246:8080/v1/chat/completions", {
+    const response = await fetch(process.env.PERPLEXITY_API_URL || "https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: headers,
       body: requestBody,
