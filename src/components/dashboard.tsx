@@ -13,12 +13,22 @@ import { InteractiveMapSimple } from '@/components/interactive-map-simple';
 import { RightPanelValuation } from '@/components/right-panel-valuation';
 import { RightPanelRadarChart } from '@/components/right-panel-radar-chart';
 import { UtilitiesInteractiveMap } from '@/components/utilities-interactive-map';
+import dynamic from 'next/dynamic';
+
+const HanoiPlanningMap = dynamic(() => import('@/components/hanoi-planning-map'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[600px] bg-gray-100 animate-pulse rounded-lg flex items-center justify-center">
+      <p className="text-gray-500">Đang tải bản đồ quy hoạch...</p>
+    </div>
+  )
+});
 import { Header } from '@/components/ui/header';
 import type { CombinedResult } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Search, Home, TrendingUp, CheckCircle, Info } from 'lucide-react';
+import { MapPin, Search, Home, TrendingUp, CheckCircle, Info, Map } from 'lucide-react';
 
 interface LocationData {
   latitude: number;
@@ -169,6 +179,150 @@ export default function Dashboard() {
                     })()}
                   </>
                 )}
+
+                {/* Bản đồ quy hoạch Hà Nội - Always show for all result formats */}
+                <Card className="professional-card bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl shadow-lg">
+                        <Map className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-slate-800">Bản đồ quy hoạch chi tiết</h3>
+                        <p className="text-sm text-slate-600 font-normal">
+                          Thông tin quy hoạch 2030 và đất đai khu vực
+                        </p>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-semibold text-blue-800 mb-2">🗺️ Tính năng bản đồ</h4>
+                        <ul className="text-sm text-blue-700 space-y-1">
+                          <li>• Click vào bản đồ để xem thông tin quy hoạch chi tiết</li>
+                          <li>• Chuyển đổi giữa các layer: QH 2030, QH 1/500, QH phân khu</li>
+                          <li>• Tìm kiếm địa chỉ và xem thông tin thửa đất</li>
+                          <li>• Zoom để xem chi tiết ở mức độ cao</li>
+                          <li>• Xem thông tin tiện ích xung quanh</li>
+                        </ul>
+                      </div>
+                    </div>
+                    
+                    {/* Location Info - hiển thị tọa độ hiện tại */}
+                    {(() => {
+                      let lat, lng, locationInfo = 'Trung tâm Hà Nội';
+                      const anyResult = result as any;
+                      
+                      // Tìm coordinates từ result hoặc selectedLocation với thứ tự ưu tiên
+                      if (anyResult.valuation_result?.location?.coordinates) {
+                        // Định dạng mới: [lng, lat]
+                        lng = anyResult.valuation_result.location.coordinates[0];
+                        lat = anyResult.valuation_result.location.coordinates[1];
+                        locationInfo = anyResult.valuation_result.location?.address || 
+                                     anyResult.valuation_result.property?.address || 
+                                     'Vị trí được thẩm định';
+                      } else if (anyResult.input_data?.coordinates && Array.isArray(anyResult.input_data.coordinates)) {
+                        // Input data coordinates: [lat, lng]
+                        lat = anyResult.input_data.coordinates[0];
+                        lng = anyResult.input_data.coordinates[1];
+                        locationInfo = 'Vị trí được thẩm định';
+                      } else if (anyResult.valuation_payload?.geoLocation && anyResult.valuation_payload.geoLocation.length === 2) {
+                        // Định dạng cũ: [lng, lat]
+                        lng = anyResult.valuation_payload.geoLocation[0];
+                        lat = anyResult.valuation_payload.geoLocation[1];
+                        locationInfo = anyResult.inputData?.location || 
+                                     anyResult.valuation?.property?.address ||
+                                     'Vị trí được thẩm định';
+                      } else if (selectedLocation) {
+                        // Từ selected location: [lat, lng]
+                        lat = selectedLocation.latitude;
+                        lng = selectedLocation.longitude;
+                        locationInfo = selectedLocation.address || 
+                                     `${selectedLocation.ward || ''} ${selectedLocation.district || ''} ${selectedLocation.city || ''}`.trim() ||
+                                     'Vị trí đã chọn';
+                      } else {
+                        // Fallback: trung tâm Hà Nội
+                        lat = 21.0285;
+                        lng = 105.8542;
+                        locationInfo = 'Trung tâm Hà Nội (mặc định)';
+                      }
+                      
+                      return (
+                        <>
+                          {/* Interactive Map */}
+                          <div className="rounded-lg overflow-hidden border border-green-200 shadow-lg">
+                            <HanoiPlanningMap
+                              height="600px"
+                              showControls={true}
+                              className="planning-map-container"
+                              baseMapType="google-hybrid"
+                              initialLat={lat}
+                              initialLng={lng}
+                              initialZoom={16}
+                              autoClickOnLoad={true}
+                              showHanoiLandLayer={lat >= 20.8 && lat <= 21.4 && lng >= 105.3 && lng <= 106.0}
+                            />
+                          </div>
+                          
+                          {/* Property Info Overlay */}
+                          <div className="mt-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Home className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-800">Thông tin BDS được thẩm định</span>
+                            </div>
+                            {(() => {
+                              // Extract property info from result
+                              const anyResult = result as any;
+                              let propertyInfo = null;
+                              
+                              if (anyResult.valuation_result?.property) {
+                                propertyInfo = anyResult.valuation_result.property;
+                              } else if (anyResult.valuation_result?.evaluation) {
+                                propertyInfo = anyResult.valuation_result.evaluation;
+                              } else if (anyResult.valuation?.property) {
+                                propertyInfo = anyResult.valuation.property;
+                              } else if (anyResult.inputData) {
+                                propertyInfo = anyResult.inputData;
+                              }
+                              
+                              return propertyInfo ? (
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  {(propertyInfo.area || propertyInfo.landArea) && (
+                                    <div>
+                                      <span className="text-slate-600">Diện tích:</span>
+                                      <span className="ml-1 font-medium text-slate-800">{propertyInfo.area || propertyInfo.landArea}m²</span>
+                                    </div>
+                                  )}
+                                  {(propertyInfo.floors || propertyInfo.storyNumber) && (
+                                    <div>
+                                      <span className="text-slate-600">Số tầng:</span>
+                                      <span className="ml-1 font-medium text-slate-800">{propertyInfo.floors || propertyInfo.storyNumber}</span>
+                                    </div>
+                                  )}
+                                  {(propertyInfo.yearBuilt || propertyInfo.year) && (
+                                    <div>
+                                      <span className="text-slate-600">Năm xây:</span>
+                                      <span className="ml-1 font-medium text-slate-800">{propertyInfo.yearBuilt || propertyInfo.year}</span>
+                                    </div>
+                                  )}
+                                  {(propertyInfo.propertyType || propertyInfo.type) && (
+                                    <div>
+                                      <span className="text-slate-600">Loại hình:</span>
+                                      <span className="ml-1 font-medium text-slate-800">{propertyInfo.propertyType || propertyInfo.type}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-600">Thông tin BDS được hiển thị trên bản đồ tại tọa độ đã chọn</p>
+                              );
+                            })()}
+                          </div>
+                        </>
+                      );
+                    })()} 
+                  </CardContent>
+                </Card>
               </div>
             )}
           </section>
@@ -271,6 +425,8 @@ export default function Dashboard() {
             )}
           </aside>
         </div>
+
+
       </main>
     </div>
   );

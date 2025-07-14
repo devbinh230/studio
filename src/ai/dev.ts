@@ -3,3 +3,4 @@ config();
 
 import '@/ai/flows/property-valuation.ts';
 import '@/ai/flows/property-analysis';
+import '@/ai/flows/property-deep-valuation';

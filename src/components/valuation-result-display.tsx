@@ -841,7 +841,7 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
       <Card className="bg-gray-50">
         <CardContent className="pt-6">
           <div className="flex flex-wrap justify-between items-center text-sm text-gray-600">
-            <span>Transaction ID: {crypto.randomUUID()}</span>
+            <span>Transaction ID: {`TX-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`}</span>
             <span>Ngày tạo: {new Date().toLocaleDateString('vi-VN')}</span>
           </div>
         </CardContent>
