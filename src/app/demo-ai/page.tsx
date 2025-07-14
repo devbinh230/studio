@@ -223,7 +223,7 @@ Dữ liệu thị trường bất động sản (12 tháng gần nhất):
                       <div>Khu vực: {testCase.input.ward}, {testCase.input.district}</div>
                       <div>Loại: {testCase.input.type}</div>
                       <div>Diện tích đất: {testCase.input.lotSize}m²</div>
-                      <div>Diện tích sàn: {testCase.input.size}m²</div>
+                      <div>Diện tích xây dựng: {testCase.input.size}m²</div>
                       <div>Phòng ngủ: {testCase.input.bedrooms}</div>
                       <div>Phòng tắm: {testCase.input.bathrooms}</div>
                     </div>

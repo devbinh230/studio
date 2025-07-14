@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { propertyValuationRange } from '@/ai/flows/property-valuation';
 import { searchRealEstateData } from '@/lib/search-utils';
+import fs from 'fs';
+import path from 'path';
 
 // Helper function to format market data for AI prompt
 function formatMarketDataForAI(priceTrendData: any): string {
@@ -107,6 +109,8 @@ export async function POST(request: NextRequest) {
       bounding_box: mainFeature?.bb || [],
     };
 
+
+
     // Create valuation payload with defaults
     const defaultDetails = {
       type: 'town_house',
@@ -197,6 +201,23 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
 
+    // Step 1.5: Reverse geocode to get street name
+    console.log('\n🛣️ STEP 1.5: Reverse geocoding to get street name...');
+    let streetName = '';
+    try {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`;
+      const nominatimRes = await fetch(nominatimUrl, { headers: { 'User-Agent': 'studio-bds/1.0' } });
+      if (nominatimRes.ok) {
+        const nominatimData = await nominatimRes.json();
+        streetName = nominatimData.address?.road || nominatimData.address?.pedestrian || nominatimData.address?.footway || '';
+        console.log('🛣️  Street name from Nominatim:', streetName);
+      } else {
+        console.log('⚠️  Nominatim reverse geocoding failed');
+      }
+    } catch (err) {
+      console.log('⚠️  Nominatim error:', err);
+    }
+
     // Step 2.5: Get search data from internet
     console.log('\n🔍 STEP 2.5: Getting search data from internet...');
     const step2_5Start = Date.now();
@@ -205,19 +226,85 @@ export async function POST(request: NextRequest) {
     let searchData = '';
     
     try {
-      searchData = await searchRealEstateData(locationString, parsedAddress);
+      console.log('🔍 Starting search with params:', {
+        locationString,
+        streetName,
+        propertyType: property_details?.type,
+        landArea: property_details?.landArea
+      });
+      
+      searchData = await searchRealEstateData(locationString, parsedAddress, property_details, streetName);
       if (searchData) {
         console.log('✅ Search data received from internet');
+        console.log('📄 Search data length:', searchData.length);
       } else {
         console.log('⚠️  No relevant search data found');
         searchData = 'Không có dữ liệu search phù hợp từ internet.';
       }
     } catch (error) {
       console.log('⚠️  Search API failed, using fallback');
+      console.error('Search API error details:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
       searchData = 'Không thể truy cập dữ liệu search từ internet.';
     }
 
     console.log(`⏱️  Step 2.5 time: ${Date.now() - step2_5Start}ms`);
+
+    // Step 1.6: Find price_gov from output.json
+    function normalizeStreetName(name: string): string {
+      if (!name) return '';
+      let n = name.toLowerCase().replace(/^(đường|pho|phố|duong|street)\s+/g, '');
+      n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
+      n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      n = n.replace(/\s+/g, ' ').trim();
+      return n;
+    }
+    function normalizeDistrictName(name: string): string {
+      if (!name) return '';
+      let n = name.toLowerCase().replace(/^(quận|huyện|thành phố)\s+/g, '');
+      n = n.replace(/_/g, ' ');
+      n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
+      n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+      n = n.replace(/\s+/g, ' ').trim();
+      return n;
+    }
+    let price_gov = '';
+    if (streetName && parsedAddress.district) {
+      try {
+        const outputPath = path.join(process.cwd(), 'price_gov.json');
+        const outputData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+        const queryNorm = normalizeStreetName(streetName);
+        // Bước 1: Lọc theo tên đường
+        const streetMatches = outputData.filter((item: any) => {
+          const streetNorm = normalizeStreetName(item['Đường']);
+          // So sánh includes cả hai chiều
+          return (streetNorm === queryNorm || streetNorm.includes(queryNorm) || queryNorm.includes(streetNorm));
+        });
+        if (streetMatches.length === 0) {
+          console.log('⚠️  Không tìm thấy tên đường phù hợp:', queryNorm);
+        } else {
+          // Bước 2: Lọc theo tên quận
+          const queryDistrictNorm = normalizeDistrictName(parsedAddress.district);
+          const found = streetMatches.find((item: any) => {
+            const districtNorm = normalizeDistrictName(item['Quận']);
+            // Log for debug
+            // console.log('So sánh quận:', {queryDistrictNorm, districtNorm});
+            return districtNorm === queryDistrictNorm;
+          });
+          if (found) {
+            console.log('💰 JSON price_gov object:', found);
+            price_gov = JSON.stringify(found);
+            console.log('💰 Found price_gov:', price_gov);
+          } else {
+            console.log('⚠️  Không tìm thấy quận phù hợp sau khi đã khớp tên đường:', queryDistrictNorm);
+          }
+        }
+      } catch (err) {
+        console.log('⚠️  Error reading price_gov.json:', err);
+      }
+    }
 
     // Step 3: Prepare AI input
     console.log('\n🤖 STEP 3: Preparing AI valuation input...');
@@ -247,6 +334,7 @@ export async function POST(request: NextRequest) {
       yearBuilt: mergedDetails.yearBuilt || 2015,
       marketData: marketData,
       searchData: searchData,
+      price_gov: price_gov,
     };
 
     console.log('📊 AI Input:', JSON.stringify(aiInput, null, 2));

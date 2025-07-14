@@ -58,6 +58,15 @@ const formSchema = z.object({
     required_error: 'Vui lòng chọn tình trạng pháp lý.',
   }),
   yearBuilt: z.coerce.number().min(1900, 'Năm xây dựng phải từ 1900 trở lên.').max(new Date().getFullYear(), `Năm xây dựng không thể lớn hơn ${new Date().getFullYear()}.`),
+  alleyType: z.enum(['thong', 'cut'], {
+    required_error: 'Vui lòng chọn loại ngõ.',
+  }).optional(),
+  houseDirection: z.enum(['dong', 'tay', 'nam', 'bac'], {
+    required_error: 'Vui lòng chọn hướng nhà.',
+  }).optional(),
+  soShape: z.enum(['vuong', 'no_hau', 'thop_hau', 'phuc_tap'], {
+    required_error: 'Vui lòng chọn hình dáng sổ.',
+  }),
 });
 
 // Property type options with Vietnamese labels
@@ -76,6 +85,28 @@ const legalOptions = [
   { value: 'pink_book', label: 'Sổ hồng' },
   { value: 'white_book', label: 'Sổ trắng' },
   { value: 'contract', label: 'Hợp đồng' },
+] as const;
+
+// Alley type options with Vietnamese labels
+const alleyTypeOptions = [
+  { value: 'thong', label: 'Ngõ thông' },
+  { value: 'cut', label: 'Ngõ cụt' },
+] as const;
+
+// House direction options with Vietnamese labels
+const houseDirectionOptions = [
+  { value: 'dong', label: 'Đông' },
+  { value: 'tay', label: 'Tây' },
+  { value: 'nam', label: 'Nam' },
+  { value: 'bac', label: 'Bắc' },
+] as const;
+
+// Sổ shape options
+const soShapeOptions = [
+  { value: 'vuong', label: 'Sổ vuông' },
+  { value: 'no_hau', label: 'Nở hậu' },
+  { value: 'thop_hau', label: 'Thóp hậu' },
+  { value: 'phuc_tap', label: 'Phức tạp' },
 ] as const;
 
 interface LocationData {
@@ -133,6 +164,9 @@ export function PropertyInputForm({
       bathrooms: 2,
       legal: 'contract',
       yearBuilt: 2015,
+      alleyType: 'thong',
+      houseDirection: 'nam',
+      soShape: 'vuong',
     },
   });
 
@@ -265,6 +299,9 @@ export function PropertyInputForm({
           bathRoom: values.bathrooms,
           legal: values.legal,
           yearBuilt: values.yearBuilt,
+          alleyType: values.alleyType,
+          houseDirection: values.houseDirection,
+          soShape: values.soShape,
         },
         auth_token: authToken,
       };
@@ -520,10 +557,99 @@ export function PropertyInputForm({
                 name="houseArea"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Diện tích sàn (m²)</FormLabel>
+                    <FormLabel className="text-sm font-medium">Diện tích xây dựng (m²)</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="33" {...field} className="h-10" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Alley Type - Only show for lane_house */}
+            {form.watch('type') === 'lane_house' && (
+              <FormField
+                control={form.control}
+                name="alleyType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Loại ngõ</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Chọn loại ngõ" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {alleyTypeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* House Direction & Sổ Shape */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="houseDirection"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Hướng nhà</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Hướng nhà" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {houseDirectionOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="soShape"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Hình dáng sổ</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Hình dáng lô đất" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {soShapeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <Layers className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -196,6 +196,23 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
 
+    // Step 1.5: Reverse geocode to get street name
+    console.log('\n🛣️ STEP 1.5: Reverse geocoding to get street name...');
+    let streetName = '';
+    try {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`;
+      const nominatimRes = await fetch(nominatimUrl, { headers: { 'User-Agent': 'studio-bds/1.0' } });
+      if (nominatimRes.ok) {
+        const nominatimData = await nominatimRes.json();
+        streetName = nominatimData.address?.road || nominatimData.address?.pedestrian || nominatimData.address?.footway || '';
+        console.log('🛣️  Street name from Nominatim:', streetName);
+      } else {
+        console.log('⚠️  Nominatim reverse geocoding failed');
+      }
+    } catch (err) {
+      console.log('⚠️  Nominatim error:', err);
+    }
+
     // Step 2.5: Get search data from internet
     console.log('\n🔍 STEP 2.5: Getting search data from internet...');
     const step2_5Start = Date.now();
@@ -204,7 +221,7 @@ export async function POST(request: NextRequest) {
     let searchData = '';
     
     try {
-      searchData = await searchRealEstateData(locationString, parsedAddress);
+      searchData = await searchRealEstateData(locationString, parsedAddress, property_details, streetName);
       if (searchData) {
         console.log('✅ Search data received from internet');
       } else {

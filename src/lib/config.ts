@@ -1,5 +1,14 @@
 // API Configuration from Environment Variables
 export const config = {
+  // Proxy Server Configuration (Primary AI provider)
+  proxy: {
+    baseUrl: process.env.PROXY_SERVER_URL,
+    apiKey: process.env.PROXY_SERVER_API_KEY,
+    timeout: 15000, // 15 seconds timeout
+    enabled: process.env.PROXY_SERVER_ENABLED === 'true',
+    model: process.env.PROXY_SERVER_MODEL || 'o3', // Default model for proxy
+  },
+
   // Resta.vn API Configuration
   resta: {
     // Current token (used in client components and API routes)
@@ -11,14 +20,29 @@ export const config = {
     apiKey: process.env.GEOAPIFY_API_KEY
   },
 
-  // Perplexity AI API Configuration
+  // Perplexity AI API Configuration (Fallback)
   perplexity: {
-    apiKey: process.env.PERPLEXITY_API_KEY
+    apiKey: process.env.PERPLEXITY_API_KEY,
+    baseUrl: process.env.PERPLEXITY_API_URL || "https://api.perplexity.ai/chat/completions",
+    timeout: 10000, // 10 seconds timeout
+    model: process.env.PERPLEXITY_MODEL || 'sonar-pro', // Default model for Perplexity
   },
 
   // Jina AI API Configuration (deprecated, kept for legacy support)
   jina: {
     apiKey: process.env.JINA_API_KEY
+  },
+
+  // AI Models Configuration
+  models: {
+    proxy: {
+      search: process.env.PROXY_SEARCH_MODEL || 'o3',
+      fallback: process.env.PROXY_FALLBACK_MODEL || 'gpt-4o-mini'
+    },
+    perplexity: {
+      search: process.env.PERPLEXITY_SEARCH_MODEL || 'sonar-pro',
+      fallback: process.env.PERPLEXITY_FALLBACK_MODEL || 'pplx-7b-online'
+    }
   }
 };
 
@@ -29,6 +53,22 @@ export const clientConfig = {
   },
   geoapify: {
     apiKey: process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
+  }
+};
+
+// Security utility to mask sensitive information
+const maskSensitiveData = (data: string): string => {
+  if (!data || data.length < 8) return '***';
+  return data.substring(0, 4) + '***' + data.substring(data.length - 4);
+};
+
+// Security utility to mask API endpoints
+const maskEndpoint = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    return `${urlObj.protocol}//${urlObj.hostname.replace(/\./g, '*')}/***`;
+  } catch {
+    return '***masked***';
   }
 };
 
@@ -50,6 +90,31 @@ export const getGeoapifyApiKey = () => {
   return apiKey;
 };
 
+// Helper function to get Proxy Server config with security masking
+export const getProxyServerConfig = () => {
+  const baseUrl = config.proxy.baseUrl;
+  const apiKey = config.proxy.apiKey;
+  const enabled = config.proxy.enabled;
+  const model = config.proxy.model;
+  
+  if (!enabled || !baseUrl || !apiKey) {
+    console.log('🔄 Proxy server not available or disabled');
+    return null;
+  }
+  
+  console.log(`🔗 Using proxy server: ${maskEndpoint(baseUrl)}`);
+  console.log(`🔑 Proxy API key: ${maskSensitiveData(apiKey)}`);
+  console.log(`🤖 Proxy model: ${model}`);
+  
+  return {
+    baseUrl,
+    apiKey,
+    timeout: config.proxy.timeout,
+    enabled,
+    model
+  };
+};
+
 // Helper function to get Perplexity API key (throws error if not set)
 export const getPerplexityApiKey = () => {
   const apiKey = config.perplexity.apiKey;
@@ -57,6 +122,42 @@ export const getPerplexityApiKey = () => {
     throw new Error('PERPLEXITY_API_KEY is not set in environment variables');
   }
   return apiKey;
+};
+
+// Helper function to get Perplexity config with security masking
+export const getPerplexityConfig = () => {
+  const apiKey = config.perplexity.apiKey;
+  const baseUrl = config.perplexity.baseUrl;
+  const model = config.perplexity.model;
+  
+  if (!apiKey) {
+    throw new Error('PERPLEXITY_API_KEY is not set in environment variables');
+  }
+  
+  console.log(`🔗 Using Perplexity API: ${maskEndpoint(baseUrl)}`);
+  console.log(`🔑 Perplexity API key: ${maskSensitiveData(apiKey)}`);
+  console.log(`🤖 Perplexity model: ${model}`);
+  
+  return {
+    baseUrl,
+    apiKey,
+    timeout: config.perplexity.timeout,
+    model
+  };
+};
+
+// Helper function to get model configuration
+export const getModelConfig = () => {
+  return {
+    proxy: {
+      primary: config.models.proxy.search,
+      fallback: config.models.proxy.fallback
+    },
+    perplexity: {
+      primary: config.models.perplexity.search,
+      fallback: config.models.perplexity.fallback
+    }
+  };
 };
 
 // Helper function to get Jina API key (throws error if not set)
@@ -68,6 +169,23 @@ export const getJinaApiKey = () => {
   return apiKey;
 };
 
+// AI Provider Status Check
+export const checkAIProviderStatus = () => {
+  const proxy = getProxyServerConfig();
+  const hasPerplexity = !!config.perplexity.apiKey;
+  
+  return {
+    proxy: {
+      available: !!proxy,
+      masked_url: proxy ? maskEndpoint(proxy.baseUrl) : null,
+      model: proxy ? proxy.model : null
+    },
+    perplexity: {
+      available: hasPerplexity,
+      masked_url: hasPerplexity ? maskEndpoint(config.perplexity.baseUrl) : null,
+      model: hasPerplexity ? config.perplexity.model : null
+    }
+  };
 // Guland Server Configuration
 export const GULAND_CONFIG = {
   SERVER_URL: process.env.NEXT_PUBLIC_GULAND_SERVER_URL || 'http://localhost:8000',

@@ -17,7 +17,7 @@ const PropertyAnalysisInputSchema = z.object({
   ward: z.string().describe('Phường/Xã.'),
   administrativeLevel: z.number().describe('Cấp hành chính (0: đô thị trung ương, 1: tỉnh, ...).'),
   type: z.string().describe('Loại bất động sản (ví dụ: lane_house, apartment, NORMAL, v.v.).'),
-  size: z.number().describe('Diện tích sàn (m²).'),
+  size: z.number().describe('Diện tích xây dựng (m²).'),
   lotSize: z.number().describe('Diện tích lô đất (m²).'),
   landArea: z.number().describe('Diện tích đất (m²).'),
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
@@ -31,6 +31,8 @@ const PropertyAnalysisInputSchema = z.object({
   yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
   searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
+  alleyType: z.string().describe('Loại ngõ (thong: ngõ thông, cut: ngõ cụt).').optional(),
+  houseDirection: z.string().describe('Hướng nhà (dong, tay, nam, bac).').optional(),
 });
 export type PropertyAnalysisInput = z.infer<typeof PropertyAnalysisInputSchema>;
 
@@ -66,7 +68,8 @@ const prompt = ai.definePrompt({
 - Năm xây dựng: {{{yearBuilt}}}
 - Tiện ích: {{{amenities}}}
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})
-
+- Loại ngõ: {{{alleyType}}} (thong: ngõ thông, cut: ngõ cụt)
+- Hướng nhà: {{{houseDirection}}} (dong: Đông, tay: Tây, nam: Nam, bac: Bắc)
 **Dữ liệu thị trường:**
 {{{marketData}}}
 
@@ -91,6 +94,7 @@ Phân tích chi tiết từ marketData (giá trung bình, số giao dịch theo 
    - Tên đường/phố trong {{{address}}} (đường lớn = điểm cao)
    - Phường {{{ward}}} + Quận {{{district}}} + TP {{{city}}} (trung tâm = điểm cao)
    - Cấp hành chính {{{administrativeLevel}}} (0=TW cao nhất, 1=tỉnh thấp hơn)
+   - Hướng nhà {{{houseDirection}}} :  Nam, Đông điểm cao do đón gió quanh năm, Tây, Bắc điểm thấp do nắng gắt, nhiệt độ cao
 
 4. **evaluationScore** – Dựa trên marketData chi tiết:
    - So sánh giá hiện tại với giá trung bình trong marketData
