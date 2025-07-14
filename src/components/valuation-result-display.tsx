@@ -65,24 +65,24 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     result = {
       totalPrice: aiValuationData.reasonableValue,
       housePrice: aiValuationData.price_house,
-      landArea: propertyInfo?.specifications?.land_area ?? 0,
-      houseArea: propertyInfo?.specifications?.house_area ?? propertyInfo?.specifications?.land_area ?? 0,
-      type: propertyInfo?.specifications?.type ?? 'lane_house',
-      bedRoom: propertyInfo?.specifications?.bedrooms ?? 0,
-      bathRoom: propertyInfo?.specifications?.bathrooms ?? 0,
-      storyNumber: propertyInfo?.specifications?.story_number ?? 0,
-      facadeWidth: propertyInfo?.specifications?.facade_width ?? 0,
-      laneWidth: propertyInfo?.specifications?.lane_width ?? 0,
-      legal: propertyInfo?.specifications?.legal ?? 'contract',
-      year: propertyInfo?.specifications?.year_built ?? 2015,
+      landArea: propertyInfo?.specifications?.land_area ?? data.valuation_payload?.landArea ?? 0,
+      houseArea: propertyInfo?.specifications?.house_area ?? data.valuation_payload?.houseArea ?? propertyInfo?.specifications?.land_area ?? 0,
+      type: propertyInfo?.specifications?.type ?? data.valuation_payload?.type ?? 'lane_house',
+      bedRoom: propertyInfo?.specifications?.bedrooms ?? data.valuation_payload?.bedRoom ?? 0,
+      bathRoom: propertyInfo?.specifications?.bathrooms ?? data.valuation_payload?.bathRoom ?? 0,
+      storyNumber: propertyInfo?.specifications?.story_number ?? data.valuation_payload?.storyNumber ?? 0,
+      facadeWidth: propertyInfo?.specifications?.facade_width ?? data.valuation_payload?.facadeWidth ?? 0,
+      laneWidth: propertyInfo?.specifications?.lane_width ?? data.valuation_payload?.laneWidth ?? 0,
+      legal: propertyInfo?.specifications?.legal ?? data.valuation_payload?.legal ?? 'contract',
+      year: propertyInfo?.specifications?.year_built ?? data.valuation_payload?.yearBuilt ?? 2015,
       // Preserve original coordinates for utilities map
-      geoLocation: data.input_data?.coordinates
+      geoLocation: data.input_data?.coordinates ?? data.valuation_payload?.geoLocation
     };
 
     address = {
-      city: propertyInfo?.location?.city ?? '',
-      district: propertyInfo?.location?.district ?? '',
-      ward: propertyInfo?.location?.ward ?? '',
+      city: propertyInfo?.location?.city ?? data.valuation_payload?.address?.city ?? data.address?.city ?? '',
+      district: propertyInfo?.location?.district ?? data.valuation_payload?.address?.district ?? data.address?.district ?? '',
+      ward: propertyInfo?.location?.ward ?? data.valuation_payload?.address?.ward ?? data.address?.ward ?? '',
     };
 
     radarScore = radar ?? {
@@ -95,7 +95,10 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     };
   }
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null | undefined) => {
+    if (!value || isNaN(value) || value <= 0) {
+      return 'Chưa có thông tin';
+    }
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
@@ -110,7 +113,10 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     return { minPrice, maxPrice, basePrice };
   };
 
-  const formatPriceRange = (price: number) => {
+  const formatPriceRange = (price: number | null | undefined) => {
+    if (!price || isNaN(price) || price <= 0) {
+      return 'Chưa có thông tin';
+    }
     const billions = Math.floor(price / 1000000000);
     const millions = Math.floor((price % 1000000000) / 1000000);
     
@@ -124,17 +130,22 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     }
   };
 
-  const getPropertyType = (type: string) => {
+  const getPropertyType = (type: string | null | undefined) => {
+    if (!type) return 'Chưa xác định';
     const types: Record<string, string> = {
       'town_house': 'Nhà phố',
       'apartment': 'Chung cư',
       'villa': 'Biệt thự',
-      'house': 'Nhà riêng'
+      'house': 'Nhà riêng',
+      'lane_house': 'Nhà trong hẻm',
+      'land': 'Đất nền',
+      'shop_house': 'Nhà mặt tiền'
     };
     return types[type] || type;
   };
 
-  const getDistrictName = (district: string) => {
+  const getDistrictName = (district: string | null | undefined) => {
+    if (!district) return '';
     const districts: Record<string, string> = {
       'cau_giay': 'Cầu Giấy',
       'dong_da': 'Đống Đa',
@@ -143,16 +154,17 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
       'hai_ba_trung': 'Hai Bà Trưng',
       'thanh_xuan': 'Thanh Xuân'
     };
-    return districts[district] || district.replace('_', ' ');
+    return districts[district] || district.replace(/_/g, ' ');
   };
 
-  const getCityName = (city: string) => {
+  const getCityName = (city: string | null | undefined) => {
+    if (!city) return '';
     const cities: Record<string, string> = {
       'ha_noi': 'Hà Nội',
       'ho_chi_minh': 'TP. Hồ Chí Minh',
       'da_nang': 'Đà Nẵng'
     };
-    return cities[city] || city.replace('_', ' ');
+    return cities[city] || city.replace(/_/g, ' ');
   };
 
   // Function to get appropriate icon and category for AI analysis descriptions
@@ -378,7 +390,9 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
               <div>
                 <span className="text-slate-600">Giá theo m²: </span>
                 <span className="font-semibold text-emerald-600">
-                  {result.landArea ? formatCurrency(Math.round(result.totalPrice / result.landArea)) : 'N/A'}
+                  {result.landArea && result.landArea > 0 && result.totalPrice ? 
+                    formatCurrency(Math.round(result.totalPrice / result.landArea)) : 
+                    'Chưa có thông tin'}
                 </span>
               </div>
               <div>
@@ -498,15 +512,15 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Thành phố:</span>
-                <Badge variant="secondary">{getCityName(address.city || '')}</Badge>
+                <Badge variant="secondary">{getCityName(address?.city || '') || 'Chưa xác định'}</Badge>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Quận/Huyện:</span>
-                <Badge variant="secondary">{getDistrictName(address.district || '')}</Badge>
+                <Badge variant="secondary">{getDistrictName(address?.district || '') || 'Chưa xác định'}</Badge>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Phường/Xã:</span>
-                <Badge variant="outline">{address.ward ? address.ward.replace('_', ' ') : '—'}</Badge>
+                <Badge variant="outline">{address?.ward ? address.ward.replace(/_/g, ' ') : 'Chưa xác định'}</Badge>
               </div>
             </div>
             
@@ -516,17 +530,19 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Khoảng cách trung tâm TP:</span>
                 <span className="font-semibold text-emerald-600">
-                  {data.distance_analysis?.distances?.toCityCenter?.distance 
+                  {data.distance_analysis?.distances?.toCityCenter?.distance && 
+                   !isNaN(data.distance_analysis.distances.toCityCenter.distance)
                     ? data.distance_analysis.distances.toCityCenter.distance + ' km' 
-                    : '—'}
+                    : 'Chưa có thông tin'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Khoảng cách trung tâm quận:</span>
                 <span className="font-semibold text-emerald-600">
-                  {data.distance_analysis?.distances?.toDistrictCenter?.distance 
+                  {data.distance_analysis?.distances?.toDistrictCenter?.distance && 
+                   !isNaN(data.distance_analysis.distances.toDistrictCenter.distance)
                     ? data.distance_analysis.distances.toDistrictCenter.distance + ' km' 
-                    : '—'}
+                    : 'Chưa có thông tin'}
                 </span>
               </div>
               {data.distance_analysis?.analysis?.accessibility && (
@@ -566,33 +582,41 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm text-gray-600">Điểm vị trí</span>
-                  <span className="font-semibold text-blue-600">{radarScore.locationScore}/10</span>
+                  <span className="font-semibold text-blue-600">
+                    {radarScore.locationScore && !isNaN(radarScore.locationScore) ? radarScore.locationScore : 0}/10
+                  </span>
                 </div>
-                <Progress value={radarScore.locationScore * 10} className="h-2" />
+                <Progress value={(radarScore.locationScore && !isNaN(radarScore.locationScore) ? radarScore.locationScore : 0) * 10} className="h-2" />
               </div>
               
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm text-gray-600">Điểm pháp lý</span>
-                  <span className="font-semibold text-green-600">{radarScore.legalityScore}/10</span>
+                  <span className="font-semibold text-green-600">
+                    {radarScore.legalityScore && !isNaN(radarScore.legalityScore) ? radarScore.legalityScore : 0}/10
+                  </span>
                 </div>
-                <Progress value={radarScore.legalityScore * 10} className="h-2" />
+                <Progress value={(radarScore.legalityScore && !isNaN(radarScore.legalityScore) ? radarScore.legalityScore : 0) * 10} className="h-2" />
               </div>
               
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm text-gray-600">Điểm thanh khoản</span>
-                  <span className="font-semibold text-orange-600">{radarScore.liquidityScore}/10</span>
+                  <span className="font-semibold text-orange-600">
+                    {radarScore.liquidityScore && !isNaN(radarScore.liquidityScore) ? radarScore.liquidityScore : 0}/10
+                  </span>
                 </div>
-                <Progress value={radarScore.liquidityScore * 10} className="h-2" />
+                <Progress value={(radarScore.liquidityScore && !isNaN(radarScore.liquidityScore) ? radarScore.liquidityScore : 0) * 10} className="h-2" />
               </div>
               
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-sm text-gray-600">Tiềm năng sinh lời</span>
-                  <span className="font-semibold text-purple-600">{radarScore.dividendScore}/10</span>
+                  <span className="font-semibold text-purple-600">
+                    {radarScore.dividendScore && !isNaN(radarScore.dividendScore) ? radarScore.dividendScore : 0}/10
+                  </span>
                 </div>
-                <Progress value={radarScore.dividendScore * 10} className="h-2" />
+                <Progress value={(radarScore.dividendScore && !isNaN(radarScore.dividendScore) ? radarScore.dividendScore : 0) * 10} className="h-2" />
               </div>
               
               <Separator />
@@ -601,7 +625,7 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Điểm tổng quan:</span>
                   <span className="text-xl font-bold text-primary">
-                    {radarScore.evaluationScore}/10
+                    {radarScore.evaluationScore && !isNaN(radarScore.evaluationScore) ? radarScore.evaluationScore : 0}/10
                   </span>
                 </div>
               </div>
@@ -710,47 +734,54 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
             <div className="professional-card p-4 text-center hover:shadow-md transition-all">
               <Ruler className="h-6 w-6 mx-auto mb-2 text-emerald-600" />
               <p className="text-xs text-slate-600 mb-1">Diện tích đất</p>
-              <p className="text-lg font-semibold text-slate-800">{result.landArea || '—'}m²</p>
+              <p className="text-lg font-semibold text-slate-800">
+                {result.landArea && result.landArea > 0 ? `${result.landArea}m²` : 'Chưa có thông tin'}
+              </p>
             </div>
             <div className="professional-card p-4 text-center hover:shadow-md transition-all">
               <Home className="h-6 w-6 mx-auto mb-2 text-orange-600" />
               <p className="text-xs text-slate-600 mb-1">Diện tích nhà</p>
-              <p className="text-lg font-semibold text-slate-800">{result.houseArea || result.landArea || '—'}m²</p>
+              <p className="text-lg font-semibold text-slate-800">
+                {(result.houseArea && result.houseArea > 0) ? `${result.houseArea}m²` : 
+                 (result.landArea && result.landArea > 0) ? `${result.landArea}m²` : 'Chưa có thông tin'}
+              </p>
             </div>
             <div className="professional-card p-4 text-center hover:shadow-md transition-all">
               <Calendar className="h-6 w-6 mx-auto mb-2 text-purple-600" />
               <p className="text-xs text-slate-600 mb-1">Năm xây dựng</p>
-              <p className="text-lg font-semibold text-slate-800">{result.year || result.builtYear || '—'}</p>
+              <p className="text-lg font-semibold text-slate-800">
+                {result.year || result.builtYear || 'Chưa có thông tin'}
+              </p>
             </div>
-            {(result.bedRoom || result.bedrooms) && (
+            {(result.bedRoom || result.bedrooms) && (result.bedRoom > 0 || result.bedrooms > 0) && (
               <div className="professional-card p-4 text-center hover:shadow-md transition-all">
                 <Bed className="h-6 w-6 mx-auto mb-2 text-blue-600" />
                 <p className="text-xs text-slate-600 mb-1">Phòng ngủ</p>
                 <p className="text-lg font-semibold text-slate-800">{result.bedRoom || result.bedrooms}</p>
               </div>
             )}
-            {(result.bathRoom || result.bathrooms) && (
+            {(result.bathRoom || result.bathrooms) && (result.bathRoom > 0 || result.bathrooms > 0) && (
               <div className="professional-card p-4 text-center hover:shadow-md transition-all">
                 <Bath className="h-6 w-6 mx-auto mb-2 text-emerald-600" />
                 <p className="text-xs text-slate-600 mb-1">Phòng tắm</p>
                 <p className="text-lg font-semibold text-slate-800">{result.bathRoom || result.bathrooms}</p>
               </div>
             )}
-            {result.storyNumber && (
+            {result.storyNumber && result.storyNumber > 0 && (
               <div className="professional-card p-4 text-center hover:shadow-md transition-all">
                 <Layers className="h-6 w-6 mx-auto mb-2 text-violet-600" />
                 <p className="text-xs text-slate-600 mb-1">Số tầng</p>
                 <p className="text-lg font-semibold text-slate-800">{result.storyNumber}</p>
               </div>
             )}
-            {result.facadeWidth && (
+            {result.facadeWidth && result.facadeWidth > 0 && (
               <div className="professional-card p-4 text-center hover:shadow-md transition-all">
                 <Move className="h-6 w-6 mx-auto mb-2 text-amber-600" />
                 <p className="text-xs text-slate-600 mb-1">Mặt tiền</p>
                 <p className="text-lg font-semibold text-slate-800">{result.facadeWidth}m</p>
               </div>
             )}
-            {result.laneWidth && (
+            {result.laneWidth && result.laneWidth > 0 && (
               <div className="professional-card p-4 text-center hover:shadow-md transition-all">
                 <Car className="h-6 w-6 mx-auto mb-2 text-slate-600" />
                 <p className="text-xs text-slate-600 mb-1">Lề đường</p>
@@ -778,14 +809,20 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
         // Tìm coordinates từ nhiều nguồn với thứ tự ưu tiên mới
         let lat, lng;
         
-        // Debug log để kiểm tra data
-        console.log('🗺️ Debug utilities map data:', {
+        // Debug log để kiểm tra data - Enhanced
+        console.log('🗺️ Debug utilities map data (ENHANCED):', {
           input_data_coordinates: data.input_data?.coordinates,
           valuation_payload_geoLocation: data.valuation_payload?.geoLocation,
           result_geoLocation: result.geoLocation,
           evaluation_geoLocation: data.valuation_result?.evaluation?.geoLocation,
-          utilities: data.utilities ? 'YES' : 'NO',
-          utilities_data_length: data.utilities?.data?.length
+          utilities_exists: data.utilities ? 'YES' : 'NO',
+          utilities_structure: data.utilities ? Object.keys(data.utilities) : 'N/A',
+          utilities_data_exists: data.utilities?.data ? 'YES' : 'NO',
+          utilities_data_length: data.utilities?.data?.length,
+          utilities_total: data.utilities?.total,
+          utilities_success: data.utilities?.success,
+          utilities_groupedData_exists: data.utilities?.groupedData ? 'YES' : 'NO',
+          utilities_full_object: data.utilities
         });
         
         // Thứ tự ưu tiên tìm coordinates:

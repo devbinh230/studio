@@ -97,7 +97,10 @@ export function UtilitiesInteractiveMap({
           latitude,
           longitude,
           utilitiesFromProps: utilitiesFromProps ? 'YES' : 'NO',
-          utilitiesDataLength: utilitiesFromProps?.data?.length
+          utilitiesDataLength: utilitiesFromProps?.data?.length,
+          utilitiesTotal: utilitiesFromProps?.total,
+          utilitiesStructure: utilitiesFromProps ? Object.keys(utilitiesFromProps) : 'NO PROPS',
+          utilitiesDataFirst3: utilitiesFromProps?.data?.slice(0, 3)
         });
 
         // Nếu có utilities data từ props, sử dụng luôn

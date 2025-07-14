@@ -591,6 +591,9 @@ export async function POST(request: NextRequest) {
         soShape: sharedAIInput.soShape
       });
       console.log('🎯 Amenities:', amenities.length > 0 ? amenities : 'No amenities provided');
+      console.log('🏪 Utilities Status:', result.utilities ? 'SUCCESS' : 'FAILED');
+      console.log('🏪 Utilities Total:', result.utilities?.total || 0);
+      console.log('🏪 Utilities Data Count:', result.utilities?.data?.length || 0);
       console.log('📊 Market Data Length:', sharedMarketData ? sharedMarketData.length : 0);
       console.log('📊 Market Data Preview:', sharedMarketData ? sharedMarketData.substring(0, 200) + '...' : 'NO MARKET DATA');
       console.log('🔍 Search Data Length:', sharedSearchData ? sharedSearchData.length : 0);

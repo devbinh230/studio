@@ -186,6 +186,8 @@ export const checkAIProviderStatus = () => {
       model: hasPerplexity ? config.perplexity.model : null
     }
   };
+};
+
 // Guland Server Configuration
 export const GULAND_CONFIG = {
   SERVER_URL: process.env.NEXT_PUBLIC_GULAND_SERVER_URL || 'http://localhost:8000',
