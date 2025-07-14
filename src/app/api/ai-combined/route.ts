@@ -158,28 +158,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
 
-    // Step 2.5: Get search data from internet
-    console.log('\n🔍 STEP 2.5: Getting search data from internet...');
-    const step2_5Start = Date.now();
-
-    const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
-    let searchData = '';
-    
-    try {
-      searchData = await searchRealEstateData(locationString, parsedAddress);
-      if (searchData) {
-        console.log('✅ Search data received from internet');
-      } else {
-        console.log('⚠️  No relevant search data found');
-        searchData = 'Không có dữ liệu search phù hợp từ internet.';
-      }
-    } catch (error) {
-      console.log('⚠️  Search API failed, using fallback');
-      searchData = 'Không thể truy cập dữ liệu search từ internet.';
-    }
-
-    console.log(`⏱️  Step 2.5 time: ${Date.now() - step2_5Start}ms`);
-
     // Step 3: Prepare shared AI input
     console.log('\n🛠️  STEP 3: Preparing shared AI input...');
     const step3Start = Date.now();
@@ -225,7 +203,7 @@ export async function POST(request: NextRequest) {
       amenities: amenities,
       yearBuilt: mergedDetails.yearBuilt || 2015,
       marketData: marketData,
-      searchData: searchData,
+      searchData: 'Không có dữ liệu search từ internet.',
       price_gov:'Dữ liệu giá đất nhà nước',
       alleyType: mergedDetails.alleyType || 'thong',
       houseDirection: mergedDetails.houseDirection || 'nam',
@@ -281,7 +259,6 @@ export async function POST(request: NextRequest) {
         step_times: {
           location_data: Date.now() - step1Start,
           market_data: Date.now() - step2Start,
-          search_data: Date.now() - step2_5Start,
           preparation: Date.now() - step3Start,
           parallel_ai_execution: step4Time,
         }
