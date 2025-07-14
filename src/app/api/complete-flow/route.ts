@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
     const parallelTasks = [
       // Task 1: AI Combined API (Valuation + Analysis in PARALLEL)
       (async () => {
-        console.log('🤖🔥 [PARALLEL] Starting AI Combined API (Valuation + Analysis)...');
+        console.log(' [PARALLEL] Starting AI Combined API (Valuation + Analysis)...');
         try {
           const aiCombinedResponse = await fetch(`${request.nextUrl.origin}/api/ai-combined`, {
             method: 'POST',
@@ -486,111 +486,6 @@ export async function POST(request: NextRequest) {
         console.error(`❌ Task ${index} failed:`, taskResult.reason);
       }
     });
-
-    // Step 7: Re-run AI functions with enhanced details (if utilities data is available)
-    if (result.utilities && result.utilities.data && result.utilities.data.length > 0) {
-      console.log('\n🔄 STEP 7: Re-running AI functions with amenities data...');
-      const enhancedStart = Date.now();
-      
-      // Merge utilities into property details
-      const enhancedDetails = mergeDetailsWithUtilities(mergedDetails, result.utilities);
-      console.log(`🔄 Enhanced details with ${enhancedDetails.amenities?.length || 0} amenities from utilities:`, enhancedDetails.amenities);
-      
-      // Re-run AI functions with enhanced details in parallel
-      const enhancedTasks = [
-        // Enhanced AI Valuation
-        (async () => {
-          console.log('🤖 [ENHANCED] Re-running AI valuation with amenities...');
-          try {
-            const aiValuationResponse = await fetch(`${request.nextUrl.origin}/api/property-valuation`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-              body: JSON.stringify({
-                latitude,
-                longitude,
-                property_details: enhancedDetails, // Using enhanced details with amenities
-                auth_token
-              }),
-            });
-
-            if (aiValuationResponse.ok) {
-              const aiValuationData = await aiValuationResponse.json();
-              console.log('✅ [ENHANCED] AI Valuation with amenities completed');
-              return { type: 'enhanced_ai_valuation', data: aiValuationData, success: true };
-            } else {
-              console.log('⚠️  [ENHANCED] AI Valuation failed, keeping original result');
-              return { type: 'enhanced_ai_valuation', data: null, success: false };
-            }
-          } catch (error) {
-            console.log('⚠️  [ENHANCED] AI Valuation error, keeping original result:', error);
-            return { type: 'enhanced_ai_valuation', data: null, success: false };
-          }
-        })(),
-
-        // Enhanced AI Analysis
-        (async () => {
-          console.log('🧠 [ENHANCED] Re-running AI analysis with amenities...');
-          try {
-            const aiAnalysisResponse = await fetch(`${request.nextUrl.origin}/api/property-analysis`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-              },
-              body: JSON.stringify({
-                latitude,
-                longitude,
-                property_details: enhancedDetails, // Using enhanced details with amenities
-                auth_token
-              }),
-            });
-
-            if (aiAnalysisResponse.ok) {
-              const aiAnalysisData = await aiAnalysisResponse.json();
-              console.log('✅ [ENHANCED] AI Analysis with amenities completed');
-              return { type: 'enhanced_ai_analysis', data: aiAnalysisData, success: true };
-            } else {
-              console.log('⚠️  [ENHANCED] AI Analysis failed, keeping original result');
-              return { type: 'enhanced_ai_analysis', data: null, success: false };
-            }
-          } catch (error) {
-            console.log('⚠️  [ENHANCED] AI Analysis error, keeping original result:', error);
-            return { type: 'enhanced_ai_analysis', data: null, success: false };
-          }
-        })(),
-      ];
-
-      // Execute enhanced tasks
-      const enhancedResults = await Promise.allSettled(enhancedTasks);
-      
-      // Update results with enhanced data if successful
-      enhancedResults.forEach((taskResult) => {
-        if (taskResult.status === 'fulfilled') {
-          const taskValue = taskResult.value;
-          const { type, data, success } = taskValue;
-          
-          if (success && data) {
-            switch (type) {
-              case 'enhanced_ai_valuation':
-                result.ai_valuation = data;
-                console.log('🔄 Updated AI Valuation with amenities data');
-                break;
-              case 'enhanced_ai_analysis':
-                result.ai_analysis = data;
-                console.log('🔄 Updated AI Analysis with amenities data');
-                break;
-            }
-          }
-        }
-      });
-
-      result.performance.step_times.enhanced_execution = Date.now() - enhancedStart;
-      console.log(`✅ Enhanced execution completed in ${result.performance.step_times.enhanced_execution}ms`);
-    }
-
     // Note: AI valuation and analysis are now handled by separate endpoints
     // This endpoint provides core property data for other services
 
