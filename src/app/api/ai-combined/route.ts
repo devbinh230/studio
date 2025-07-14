@@ -51,13 +51,19 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   console.log('\n🤖🔥 ================= AI COMBINED API =================');
-  console.log('⚡ Running BOTH AI functions in PARALLEL');
 
   try {
-    const { latitude, longitude, property_details } = await request.json();
+    const { latitude, longitude, property_details, _shared_data } = await request.json();
 
-    // latitude/longitude are OPTIONAL. If absent or if location lookup fails, we fall back to the
-    // city/district/ward provided directly in property_details (or reasonable defaults).
+    // Check if we have shared data to avoid duplicate API calls
+    const hasSharedData = _shared_data && _shared_data.skip_data_fetching;
+    
+    if (hasSharedData) {
+      console.log('⚡ USING SHARED DATA - SKIPPING DUPLICATE API CALLS');
+      console.log('✅ Received pre-fetched data from complete-flow');
+    } else {
+      console.log('⚡ Running BOTH AI functions in PARALLEL');
+    }
 
     if (latitude && longitude) {
       console.log(`📍 Coordinates: ${latitude}, ${longitude}`);
@@ -67,7 +73,34 @@ export async function POST(request: NextRequest) {
 
     console.log(`🏠 Property details:`, property_details);
 
-    // Step 1: Determine location / parsed address
+    let parsedAddress;
+    let marketData = "Không có dữ liệu thị trường cho khu vực này.";
+    let searchData = "Không có dữ liệu search từ internet.";
+
+    if (hasSharedData) {
+      // Use shared data from complete-flow (OPTIMIZED PATH)
+      console.log('\n📦 STEP 1: Using shared data from complete-flow...');
+      const step1Start = Date.now();
+      
+      // 🔍 DEBUG: Check shared data structure
+      console.log('🔍 DEBUG: Shared Data Structure');
+      console.log('_shared_data keys:', Object.keys(_shared_data || {}));
+      console.log('_shared_data.parsedAddress:', _shared_data?.parsedAddress);
+      console.log('_shared_data.marketData length:', _shared_data?.marketData?.length || 0);
+      console.log('_shared_data.searchData length:', _shared_data?.searchData?.length || 0);
+      console.log('_shared_data.skip_data_fetching:', _shared_data?.skip_data_fetching);
+      
+      parsedAddress = _shared_data.parsedAddress;
+      marketData = _shared_data.marketData || marketData;
+      searchData = _shared_data.searchData || searchData;
+      
+      console.log(`✅ Using shared parsed address: ${parsedAddress.formatted_address || `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`}`);
+      console.log(`✅ Using shared market data: ${marketData.length > 50 ? 'Available' : 'Not available'}`);
+      console.log(`✅ Using shared search data: ${searchData.length > 50 ? 'Available' : 'Not available'}`);
+      console.log(`⏱️  Step 1 time: ${Date.now() - step1Start}ms`);
+      
+    } else {
+      // Original path for standalone usage (FALLBACK PATH)
     console.log('\n📍 STEP 1: Determining location information...');
     const step1Start = Date.now();
 
@@ -78,7 +111,7 @@ export async function POST(request: NextRequest) {
       formatted_address: string;
     };
 
-    let parsedAddress: ParsedAddress = {
+      parsedAddress = {
       city: property_details?.city || 'ha_noi',
       district: property_details?.district || 'dong_da',
       ward: property_details?.ward || 'unknown',
@@ -143,7 +176,6 @@ export async function POST(request: NextRequest) {
       headers: { 'Accept': 'application/json' },
     });
 
-    let marketData = "Không có dữ liệu thị trường cho khu vực này.";
     if (priceTrendResponse.ok) {
       const priceTrendData = await priceTrendResponse.json();
       if (priceTrendData.success && priceTrendData.data && priceTrendData.data.length > 0) {
@@ -157,6 +189,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
+    }
 
     // Step 3: Prepare shared AI input
     console.log('\n🛠️  STEP 3: Preparing shared AI input...');
@@ -202,8 +235,8 @@ export async function POST(request: NextRequest) {
       legal: mergedDetails.legal || 'contract',
       amenities: amenities,
       yearBuilt: mergedDetails.yearBuilt || 2015,
-      marketData: marketData,
-      searchData: 'Không có dữ liệu search từ internet.',
+      marketData: marketData, // Use either shared or fetched data
+      searchData: searchData, // Use either shared or fetched data
       price_gov:'Dữ liệu giá đất nhà nước',
       alleyType: mergedDetails.alleyType || 'thong',
       houseDirection: mergedDetails.houseDirection || 'nam',
@@ -212,6 +245,51 @@ export async function POST(request: NextRequest) {
 
     console.log('📊 Shared AI Input prepared');
     console.log(`⏱️  Step 3 time: ${Date.now() - step3Start}ms`);
+
+    // 🔍 DEBUG: DETAILED AI INPUT VALIDATION
+    console.log('\n🔍 DEBUG: FINAL AI INPUT VALIDATION');
+    console.log('='.repeat(60));
+    console.log('📍 Location Info:', {
+      address: sharedInput.address,
+      city: sharedInput.city,
+      district: sharedInput.district,
+      ward: sharedInput.ward,
+      administrativeLevel: sharedInput.administrativeLevel
+    });
+    console.log('🏠 Property Specifications:', {
+      type: sharedInput.type,
+      landArea: sharedInput.landArea,
+      houseArea: sharedInput.houseArea,
+      size: sharedInput.size,
+      lotSize: sharedInput.lotSize,
+      laneWidth: sharedInput.laneWidth,
+      facadeWidth: sharedInput.facadeWidth,
+      storyNumber: sharedInput.storyNumber,
+      bedrooms: sharedInput.bedrooms,
+      bathrooms: sharedInput.bathrooms,
+      legal: sharedInput.legal,
+      yearBuilt: sharedInput.yearBuilt
+    });
+    console.log('🧭 Additional Properties:', {
+      alleyType: sharedInput.alleyType,
+      houseDirection: sharedInput.houseDirection,
+      soShape: sharedInput.soShape
+    });
+    console.log('🎯 Amenities Count:', sharedInput.amenities?.length || 0);
+    console.log('🎯 Amenities List:', sharedInput.amenities || []);
+    console.log('📊 Market Data Status:', {
+      hasMarketData: !!sharedInput.marketData,
+      marketDataLength: sharedInput.marketData?.length || 0,
+      marketDataPreview: sharedInput.marketData ? sharedInput.marketData.substring(0, 150) + '...' : 'MISSING'
+    });
+    console.log('🔍 Search Data Status:', {
+      hasSearchData: !!sharedInput.searchData,
+      searchDataLength: sharedInput.searchData?.length || 0,
+      searchDataPreview: sharedInput.searchData ? sharedInput.searchData.substring(0, 150) + '...' : 'MISSING'
+    });
+    console.log('💰 Price Gov:', sharedInput.price_gov || 'NOT PROVIDED');
+    console.log('🔄 Data Source:', hasSharedData ? 'SHARED FROM COMPLETE-FLOW' : 'FETCHED INDEPENDENTLY');
+    console.log('='.repeat(60));
 
     // Step 4: Run BOTH AI functions in PARALLEL
     console.log('\n🚀 STEP 4: Running BOTH AI functions in PARALLEL...');
@@ -237,9 +315,32 @@ export async function POST(request: NextRequest) {
     console.log('✅ Property Valuation:', 'error' in valuationResult ? 'Failed' : 'Success');
     console.log('✅ Property Analysis:', 'error' in analysisResult ? 'Failed' : 'Success');
 
+    // DEBUG: Log detailed AI results
+    console.log('🔍 DEBUG: AI Results Analysis');
+    console.log('📊 Valuation Result Type:', typeof valuationResult);
+    console.log('📊 Valuation Result:', valuationResult);
+    console.log('📊 Analysis Result Type:', typeof analysisResult);
+    console.log('📊 Analysis Result:', analysisResult);
+    
+    // Check for errors in results
+    if ('error' in valuationResult) {
+      console.log('❌ VALUATION FAILED:', valuationResult.error);
+    } else {
+      console.log('✅ VALUATION SUCCESS:', Object.keys(valuationResult || {}));
+    }
+    
+    if ('error' in analysisResult) {
+      console.log('❌ ANALYSIS FAILED:', analysisResult.error);
+    } else {
+      console.log('✅ ANALYSIS SUCCESS:', Object.keys(analysisResult || {}));
+    }
+
     // Final result
     const totalTime = Date.now() - startTime;
     console.log(`\n⏱️  Total execution time: ${totalTime}ms`);
+    if (hasSharedData) {
+      console.log('🔥 PERFORMANCE BOOST: Used shared data, eliminated duplicate API calls!');
+    }
     console.log('🤖🔥 =================');
 
     return NextResponse.json({
@@ -253,14 +354,18 @@ export async function POST(request: NextRequest) {
         property_details: property_details,
         parsed_address: parsedAddress,
         shared_input: sharedInput,
+        used_shared_data: hasSharedData, // Track optimization usage
       },
       performance: {
         total_time: totalTime,
         step_times: {
-          location_data: Date.now() - step1Start,
-          market_data: Date.now() - step2Start,
-          preparation: Date.now() - step3Start,
+          data_preparation: Date.now() - step3Start,
           parallel_ai_execution: step4Time,
+        },
+        optimization: {
+          used_shared_data: hasSharedData,
+          eliminated_api_calls: hasSharedData ? ['location', 'price-trend', 'search-utils'] : [],
+          time_saved_by_sharing: hasSharedData ? 'Significant - avoided duplicate API calls' : 'None'
         }
       },
       errors: {
