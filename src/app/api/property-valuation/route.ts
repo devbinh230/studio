@@ -256,6 +256,7 @@ export async function POST(request: NextRequest) {
     function normalizeStreetName(name: string): string {
       if (!name) return '';
       let n = name.toLowerCase().replace(/^(đường|pho|phố|duong|street)\s+/g, '');
+      n = n.replace('quan_', '')
       n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
       n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
       n = n.replace(/\s+/g, ' ').trim();
@@ -290,7 +291,7 @@ export async function POST(request: NextRequest) {
           const found = streetMatches.find((item: any) => {
             const districtNorm = normalizeDistrictName(item['Quận']);
             // Log for debug
-            // console.log('So sánh quận:', {queryDistrictNorm, districtNorm});
+            console.log('So sánh quận:', {queryDistrictNorm, districtNorm});
             return districtNorm === queryDistrictNorm;
           });
           if (found) {

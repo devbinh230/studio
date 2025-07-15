@@ -46,7 +46,10 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
   let isAIEnhanced = false;
 
   if (hasEvaluation) {
-    result = data.valuation_result.evaluation;
+    result = {
+      ...data.valuation_result.evaluation,
+      price_gov_place: data.valuation_result?.price_gov_place ?? data.price_gov_place
+    };
     address = result.address;
     radarScore = result.radarScore;
     isMockData = data.error && data.error.includes('mock');
@@ -65,6 +68,7 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     result = {
       totalPrice: aiValuationData.reasonableValue,
       housePrice: aiValuationData.price_house,
+      price_gov_place: aiValuationData.price_gov_place,
       landArea: propertyInfo?.specifications?.land_area ?? data.valuation_payload?.landArea ?? 0,
       houseArea: propertyInfo?.specifications?.house_area ?? data.valuation_payload?.houseArea ?? propertyInfo?.specifications?.land_area ?? 0,
       type: propertyInfo?.specifications?.type ?? data.valuation_payload?.type ?? 'lane_house',
@@ -386,7 +390,7 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                 {formatCurrency(result.totalPrice)}
               </p>
             </div>
-            <div className="flex justify-center gap-8 text-sm">
+            <div className="flex justify-center gap-6 text-sm flex-wrap">
               <div>
                 <span className="text-slate-600">Giá theo m²: </span>
                 <span className="font-semibold text-emerald-600">
@@ -401,6 +405,14 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                   {formatCurrency(result.housePrice)}
                 </span>
               </div>
+              {result.price_gov_place > 0 && !isNaN(result.price_gov_place) && (
+                <div>
+                  <span className="text-slate-600">Giá theo quy định: </span>
+                  <span className="font-semibold text-blue-600">
+                    {formatCurrency(result.price_gov_place)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
