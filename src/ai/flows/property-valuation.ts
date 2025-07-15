@@ -42,11 +42,13 @@ const PropertyValuationRangeInputSchema = z.object({
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
+// Thêm giá nhà nước (price_gov_place) vào schema output
 const PropertyValuationRangeOutputSchema = z.object({
   lowValue: z.number().describe('Giá thấp nhất có thể cho bất động sản.'),
   reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản.'),
   highValue: z.number().describe('Giá cao nhất có thể đạt được cho bất động sản.'),
   price_house: z.number().describe('Giá nhà tham khảo.'),
+  price_gov_place: z.number().describe('Giá theo quy định nhà nước cho vị trí lô đất.'),
 });
 export type PropertyValuationRangeOutput = z.infer<typeof PropertyValuationRangeOutputSchema>;
 
@@ -371,7 +373,7 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   const aiInput: PropertyValuationRangeLLMInput = {
     ...input,
     reasonableValue,
-    price_house
+    price_house,
   };
 
   const response = await prompt(aiInput);
@@ -381,7 +383,6 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   return response.output;
 }
 
-// Schema mở rộng cho LLM input
 const PropertyValuationRangeLLMInputSchema = PropertyValuationRangeInputSchema.extend({
   reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản'),
   price_house: z.number().describe('Giá xây dựng'),
@@ -447,18 +448,22 @@ const propertyValuationRangeFlow = ai.defineFlow(
     // Calculate reasonableValue and price_house using price.py logic
     const reasonableValue = calculateReasonableValue(input);
     const price_house = calculateConstructionPrice(input);
-    
+    const price_gov_place = getPriceGovPlace(input);
+
     // Prepare input for AI with calculated values
     const aiInput: PropertyValuationRangeLLMInput = {
       ...input,
       reasonableValue,
-      price_house
+      price_house,
     };
 
     const response = await prompt(aiInput);
     if (!response.output) {
       throw new Error('No output received from AI model');
     }
-    return response.output;
+    return {
+      ...response.output,
+      price_gov_place,
+    };
   }
 );

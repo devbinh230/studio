@@ -46,8 +46,11 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
   let isAIEnhanced = false;
 
   if (hasEvaluation) {
-    result = data.valuation_result.evaluation;
-    address = result.address || {}; // Add fallback empty object
+    result = {
+      ...data.valuation_result.evaluation,
+      price_gov_place: data.valuation_result?.price_gov_place ?? data.price_gov_place
+    };
+    address = result.address;
     radarScore = result.radarScore;
     isMockData = data.error && data.error.includes('mock');
   } else {
@@ -65,7 +68,7 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
     result = {
       totalPrice: aiValuationData.reasonableValue,
       housePrice: aiValuationData.price_house,
-      priceGovPlace: data.ai_valuation?.data?.price_gov_place ?? 0,
+      price_gov_place: aiValuationData.price_gov_place,
       landArea: propertyInfo?.specifications?.land_area ?? data.valuation_payload?.landArea ?? 0,
       houseArea: propertyInfo?.specifications?.house_area ?? data.valuation_payload?.houseArea ?? propertyInfo?.specifications?.land_area ?? 0,
       type: propertyInfo?.specifications?.type ?? data.valuation_payload?.type ?? 'lane_house',
@@ -76,14 +79,14 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
       laneWidth: propertyInfo?.specifications?.lane_width ?? data.valuation_payload?.laneWidth ?? 0,
       legal: propertyInfo?.specifications?.legal ?? data.valuation_payload?.legal ?? 'contract',
       year: propertyInfo?.specifications?.year_built ?? data.valuation_payload?.yearBuilt ?? 2015,
+      // Preserve original coordinates for utilities map
       geoLocation: data.input_data?.coordinates ?? data.valuation_payload?.geoLocation
     };
 
-    // Initialize address with fallback values
     address = {
       city: propertyInfo?.location?.city ?? data.valuation_payload?.address?.city ?? data.address?.city ?? '',
       district: propertyInfo?.location?.district ?? data.valuation_payload?.address?.district ?? data.address?.district ?? '',
-      ward: propertyInfo?.location?.ward ?? data.valuation_payload?.address?.ward ?? data.address?.ward ?? ''
+      ward: propertyInfo?.location?.ward ?? data.valuation_payload?.address?.ward ?? data.address?.ward ?? '',
     };
 
     radarScore = radar ?? {
@@ -387,18 +390,26 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                 {formatCurrency(result.totalPrice)}
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-4 mt-4">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Giá theo m²:</span>
-                <span className="font-semibold">{formatCurrency(result.totalPrice / result.landArea)} VNĐ/m²</span>
+            <div className="flex justify-center gap-6 text-sm flex-wrap">
+              <div>
+                <span className="text-slate-600">Giá theo m²: </span>
+                <span className="font-semibold text-emerald-600">
+                  {result.landArea && result.landArea > 0 && result.totalPrice ? 
+                    formatCurrency(Math.round(result.totalPrice / result.landArea)) : 
+                    'Chưa có thông tin'}
+                </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Giá đất nhà nước:</span>
-                <span className="font-semibold">{formatCurrency(result.priceGovPlace)} VNĐ/m²</span>
+              <div>
+                <span className="text-slate-600">Giá nhà: </span>
+                <span className="font-semibold text-orange-600">
+                  {formatCurrency(result.housePrice)}
+                </span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Giá nhà:</span>
-                <span className="font-semibold">{formatCurrency(result.housePrice)} VNĐ</span>
+              <div>
+                <span className="text-slate-600">Giá theo quy định: </span>
+                <span className="font-semibold text-blue-600">
+                  {formatCurrency(result.price_gov_place)}
+                </span>
               </div>
             </div>
           </div>
