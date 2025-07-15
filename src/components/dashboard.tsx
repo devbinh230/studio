@@ -28,7 +28,7 @@ import type { CombinedResult } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Search, Home, TrendingUp, CheckCircle, Info, Map } from 'lucide-react';
+import { MapPin, Search, Home, TrendingUp, CheckCircle, Info, Map, ExternalLink, Globe } from 'lucide-react';
 
 interface LocationData {
   latitude: number;
@@ -323,6 +323,88 @@ export default function Dashboard() {
                     })()} 
                   </CardContent>
                 </Card>
+                
+                {/* Sources Section */}
+                {(() => {
+                  const anyResult = result as any;
+                  const sources = anyResult?.search_sources || [];
+                  
+                  if (sources.length === 0) return null;
+                  
+                  return (
+                    <Card className="professional-card bg-gradient-to-br from-slate-50 to-blue-50 border-slate-200">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl shadow-lg">
+                            <Globe className="h-6 w-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-slate-800">Nguồn tham khảo</h3>
+                            <p className="text-sm text-slate-600 font-normal">
+                              Dữ liệu từ {sources.length} nguồn thông tin
+                            </p>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-sm text-blue-700">
+                              📊 Thông tin thị trường được tổng hợp từ các trang web bất động sản uy tín và tin rao bán thực tế.
+                            </p>
+                          </div>
+                          
+                          <div className="grid gap-2 max-h-60 overflow-y-auto">
+                            {sources.map((source: string, index: number) => {
+                              // Clean trailing backslashes from URL
+                              const cleanUrl = source.replace(/\\+$/, '');
+                              
+                              // Extract domain name for display
+                              let displayName = cleanUrl;
+                              try {
+                                const url = new URL(cleanUrl);
+                                displayName = url.hostname.replace('www.', '');
+                              } catch (e) {
+                                // Keep original if URL parsing fails
+                              }
+                              
+                              return (
+                                <a
+                                  key={index}
+                                  href={cleanUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg hover:border-slate-300 hover:shadow-sm transition-all duration-200 group"
+                                >
+                                  <div className="flex items-center justify-center w-8 h-8 bg-slate-100 rounded-lg group-hover:bg-slate-200 transition-colors">
+                                    <ExternalLink className="h-4 w-4 text-slate-600 group-hover:text-slate-800" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-slate-700 group-hover:text-slate-900 truncate">
+                                      {displayName}
+                                    </p>
+                                    <p className="text-xs text-slate-500 truncate">
+                                      {cleanUrl}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200 group-hover:bg-slate-100">
+                                    #{index + 1}
+                                  </Badge>
+                                </a>
+                              );
+                            })}
+                          </div>
+                          
+                          <div className="text-center pt-2 border-t border-slate-200">
+                            <p className="text-xs text-slate-500">
+                              Dữ liệu được cập nhật từ AI Search • {new Date().toLocaleDateString('vi-VN')}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
               </div>
             )}
           </section>
