@@ -18,6 +18,26 @@ interface AIProviderResult {
   provider: 'proxy' | 'perplexity';
   success: boolean;
   error?: string;
+  sources?: string[];
+}
+
+interface AIRealEstateData {
+  "giá trung bình": number;
+  "các tin rao bán": Array<{
+    "tiêu đề": string;
+    "giá": number;
+    "diện tích": number;
+    "địa chỉ": string;
+    "link": string;
+  }>;
+}
+
+
+
+interface SearchResult {
+  formatted: string;
+  json: AIRealEstateData | null;
+  sources: string[];
 }
 
 /**
@@ -67,7 +87,7 @@ async function makeSecureAPICall(
 /**
  * Call Proxy Server API (Primary provider)
  */
-async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
+async function callProxyServer(userPrompt: string): Promise<AIProviderResult & { sources?: string[] }> {
   try {
     const proxyConfig = getProxyServerConfig();
     
@@ -76,7 +96,8 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
         content: '',
         provider: 'proxy',
         success: false,
-        error: 'Proxy server not available or disabled'
+        error: 'Proxy server not available or disabled',
+        sources: []
       };
     }
 
@@ -112,17 +133,31 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
     );
 
     if (response.ok) {
-      const data: AIResponse = await response.json();
+      const data: any = await response.json();
       
       // Enhanced logging to debug response structure
       console.log('🔍 DEBUG: Proxy Server response structure:', {
         hasChoices: !!data.choices,
         choicesLength: data.choices?.length || 0,
+        hasSources: !!data.sources,
+        sourcesLength: data.sources?.length || 0,
+        topLevelKeys: Object.keys(data),
         firstChoiceKeys: data.choices?.[0] ? Object.keys(data.choices[0]) : [],
         firstMessageKeys: data.choices?.[0]?.message ? Object.keys(data.choices[0].message) : [],
         contentLength: data.choices?.[0]?.message?.content?.length || 0,
         contentPreview: data.choices?.[0]?.message?.content?.substring(0, 100) || 'NO CONTENT'
       });
+
+      // Log sources if found
+      if (data.sources && Array.isArray(data.sources)) {
+        console.log('📋 SOURCES FOUND:', {
+          count: data.sources.length,
+          firstFew: data.sources.slice(0, 3),
+          sampleSources: data.sources.slice(0, 5).map((s: string) => s.substring(0, 50) + '...')
+        });
+      } else {
+        console.log('❌ NO SOURCES in response');
+      }
       
       // Primary validation path
       if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
@@ -132,7 +167,8 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
           return {
             content: content,
             provider: 'proxy',
-            success: true
+            success: true,
+            sources: data.sources || []
           };
         } else {
           console.warn('⚠️  Proxy Server returned empty content');
@@ -148,7 +184,8 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
         return {
           content: (data as any).content,
           provider: 'proxy',
-          success: true
+          success: true,
+          sources: data.sources || []
         };
       }
       
@@ -158,7 +195,8 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
         return {
           content: data.choices[0] as string,
           provider: 'proxy',
-          success: true
+          success: true,
+          sources: data.sources || []
         };
       }
       
@@ -176,7 +214,8 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
       content: '',
       provider: 'proxy',
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      sources: []
     };
   }
 }
@@ -184,7 +223,7 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult> {
 /**
  * Call Perplexity AI API (Fallback provider)
  */
-async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult> {
+async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult & { sources?: string[] }> {
   try {
     const perplexityConfig = getPerplexityConfig();
     
@@ -220,14 +259,36 @@ async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult> 
     );
 
     if (response.ok) {
-      const data: AIResponse = await response.json();
+      const data: any = await response.json();
+      
+      // Debug logging for Perplexity response
+      console.log('🔍 DEBUG: Perplexity response structure:', {
+        hasChoices: !!data.choices,
+        choicesLength: data.choices?.length || 0,
+        hasSources: !!data.sources,
+        sourcesLength: data.sources?.length || 0,
+        topLevelKeys: Object.keys(data),
+        contentLength: data.choices?.[0]?.message?.content?.length || 0
+      });
+
+      // Log sources if found
+      if (data.sources && Array.isArray(data.sources)) {
+        console.log('📋 PERPLEXITY SOURCES FOUND:', {
+          count: data.sources.length,
+          firstFew: data.sources.slice(0, 3),
+          sampleSources: data.sources.slice(0, 5).map((s: string) => s.substring(0, 50) + '...')
+        });
+      } else {
+        console.log('❌ NO SOURCES in Perplexity response');
+      }
       
       if (data.choices && data.choices[0] && data.choices[0].message) {
         console.log('✅ Perplexity API successful');
         return {
           content: data.choices[0].message.content,
           provider: 'perplexity',
-          success: true
+          success: true,
+          sources: data.sources || []
         };
       } else {
         throw new Error('Invalid response format from Perplexity');
@@ -243,7 +304,8 @@ async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult> 
       content: '',
       provider: 'perplexity',
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      sources: []
     };
   }
 }
@@ -477,4 +539,198 @@ function getCityProvinceKeywords(parsedAddress?: any): string[] {
   }
   
   return keywords;
+}
+
+
+
+/**
+ * Parse JSON from AI response content
+ */
+function parseAIResponseJSON(content: string): AIRealEstateData | null {
+  try {
+    // Try to extract JSON from the content
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn('❌ No JSON found in AI response');
+      return null;
+    }
+
+    const jsonStr = jsonMatch[0];
+    const parsed = JSON.parse(jsonStr);
+    
+    // Validate the structure
+    if (parsed && typeof parsed === 'object' && 
+        'giá trung bình' in parsed && 
+        'các tin rao bán' in parsed &&
+        Array.isArray(parsed['các tin rao bán'])) {
+      
+      console.log('✅ Successfully parsed AI JSON response:', {
+        avgPrice: parsed['giá trung bình'],
+        listings: parsed['các tin rao bán'].length
+      });
+      
+      return parsed as AIRealEstateData;
+    } else {
+      console.warn('❌ Invalid JSON structure in AI response');
+      return null;
+    }
+  } catch (error) {
+    console.warn('❌ Failed to parse JSON from AI response:', error);
+    return null;
+  }
+}
+
+/**
+ * Enhanced searchRealEstateData that returns both formatted string and parsed JSON
+ */
+export async function searchRealEstateDataEnhanced(location: string, parsedAddress?: any, propertyDetails?: any, streetName?: string): Promise<SearchResult> {
+  try {
+    console.log('🔍 searchRealEstateDataEnhanced called with:', {
+      location,
+      streetName,
+      propertyType: propertyDetails?.type,
+      landArea: propertyDetails?.landArea
+    });
+
+    // Check provider availability first
+    const providerStatus = checkAIProviderStatus();
+    console.log('🔍 AI Provider Status:', {
+      proxy: providerStatus.proxy.available ? 'Available' : 'Not Available',
+      perplexity: providerStatus.perplexity.available ? 'Available' : 'Not Available'
+    });
+    
+    const currentYear = new Date().getFullYear();
+    // Lấy thông tin chi tiết
+    const street = streetName || parsedAddress?.street || '';
+    const ward = parsedAddress?.ward || '';
+    const district = parsedAddress?.district || '';
+    const city = parsedAddress?.city || '';
+    const landArea = propertyDetails?.landArea || '';
+    const type = propertyDetails?.type || '';
+    const alleyType = propertyDetails?.alleyType || '';
+    const laneWidth = propertyDetails?.laneWidth || '';
+
+    // Map property type to Vietnamese description
+    const getPropertyTypeDescription = (type: string): string => {
+      const typeMap: Record<string, string> = {
+        'apartment': 'chung_cu',
+        'lane_house': 'nha_hem_ngo', 
+        'town_house': 'nha_mat_pho',
+        'land': 'ban_dat',
+        'villa': 'biet_thu_lien_ke',
+        'NORMAL': 'nha_mat_pho'
+      };
+      return typeMap[type] || type;
+    };
+
+    // Format: tên đường + phường + quận + thành phố + loại bất động sản
+    let userPrompt = `Tìm kiếm các bất động sản `;
+    if (street) userPrompt += `${street} `;
+    if (ward) userPrompt += `${ward} `;
+    if (district) userPrompt += `${district} `;
+    if (city) userPrompt += `${city} `;
+    if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
+
+    if (landArea) userPrompt += ` diện tích khoảng ${landArea} m2`;
+
+    userPrompt += `. Tìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
+
+    console.log(`🔍 Search prompt prepared (${userPrompt.length} characters)`);
+
+    let content = '';
+    let provider = '';
+    let sources: string[] = [];
+
+    // Try Proxy Server first (Primary)
+    let primaryResult = null;
+    if (providerStatus.proxy.available) {
+      console.log('🚀 Trying primary provider: Proxy Server');
+      const proxyResult = await callProxyServer(userPrompt);
+      
+      if (proxyResult.success && proxyResult.content) {
+        console.log('✅ Proxy Server successful');
+        content = proxyResult.content;
+        provider = 'proxy';
+        sources = proxyResult.sources || [];
+        console.log(`📋 Got ${sources.length} sources from Proxy Server`);
+      } else {
+        primaryResult = proxyResult;
+        const errMsg = proxyResult.error || 'Proxy Server call failed without specific error';
+        console.error(`❌ Proxy Server available but failed: ${errMsg}`);
+        console.log('🔄 Will try fallback provider...');
+      }
+    } else {
+      console.log('⚠️  Proxy Server not available, considering fallback provider');
+    }
+
+    // Try fallback when primary fails OR is not available
+    if (!content && providerStatus.perplexity.available) {
+      console.log('🔄 Trying fallback provider: Perplexity');
+      const perplexityResult = await callPerplexityAPI(userPrompt);
+      
+      if (perplexityResult.success && perplexityResult.content) {
+        console.log('✅ Perplexity successful');
+        content = perplexityResult.content;
+        provider = 'perplexity';
+        sources = perplexityResult.sources || [];
+        console.log(`📋 Got ${sources.length} sources from Perplexity`);
+      } else {
+        console.error('❌ Perplexity failed as fallback');
+      }
+    }
+
+    // If we get here and still no content, check if primary provider had some content
+    if (!content && primaryResult && primaryResult.content) {
+      console.log('⚡ Using partial data from failed primary provider as last resort...');
+      content = primaryResult.content;
+      provider = 'proxy-partial';
+      sources = (primaryResult as any).sources || [];
+      console.log(`📋 Got ${sources.length} sources from fallback primary result`);
+    }
+
+    // Process the content if we have any
+    if (content) {
+      const parsedJSON = parseAIResponseJSON(content);
+      const formatted = formatAIResponse(content, location, parsedAddress, provider);
+      
+      // Clean and validate sources
+      const cleanSources = sources.filter((url: string) => {
+        try {
+          // Remove trailing backslashes before validation
+          const cleanUrl = url.replace(/\\+$/, '');
+          new URL(cleanUrl);
+          return cleanUrl.startsWith('http');
+        } catch {
+          return false;
+        }
+      }).map((url: string) => url.replace(/\\+$/, '')); // Clean all URLs
+      
+      console.log(`🔍 Final sources count: ${cleanSources.length} valid URLs`);
+      if (cleanSources.length > 0) {
+        console.log('📋 Sample sources:', cleanSources.slice(0, 3));
+      }
+      
+      return {
+        formatted,
+        json: parsedJSON,
+        sources: cleanSources
+      };
+    }
+
+    // All providers failed or unavailable
+    console.warn('❌ All AI providers failed or were unavailable');
+    return {
+      formatted: '',
+      json: null,
+      sources: []
+    };
+
+  } catch (error) {
+    console.error('❌ Critical error in searchRealEstateDataEnhanced:', error);
+    return {
+      formatted: '',
+      json: null,
+      sources: []
+    };
+  }
 }

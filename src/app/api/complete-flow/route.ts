@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDistanceAnalysis } from '@/lib/distance-utils';
 import { mergeDetailsWithUtilities } from '@/lib/utils';
-import { searchRealEstateData } from '@/lib/search-utils';
 import fs from 'fs';
 import path from 'path';
+import { searchRealEstateData, searchRealEstateDataEnhanced } from '@/lib/search-utils';
 
 // Helper function to format currency
 function formatCurrency(value: number) {
@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
       ai_valuation: any;
       ai_analysis: any;
       distance_analysis: any;
+      ai_real_estate_data: any; // Thêm AI real estate data từ search
+      search_sources: string[]; // Thêm sources từ AI search
       success: boolean;
       error: string | null;
       performance: {
@@ -115,6 +117,8 @@ export async function POST(request: NextRequest) {
       ai_valuation: null,
       ai_analysis: null,
       distance_analysis: null,
+      ai_real_estate_data: null, // Initialize AI real estate data
+      search_sources: [], // Initialize search sources
       success: false,
       error: null,
       performance: {
@@ -519,17 +523,17 @@ export async function POST(request: NextRequest) {
           }
 
           const locationString = `${parsedAddress.ward}, ${parsedAddress.district}, ${parsedAddress.city}`;
-          const searchData = await searchRealEstateData(locationString, parsedAddress, mergedDetails, streetName);
+          const searchResult = await searchRealEstateDataEnhanced(locationString, parsedAddress, mergedDetails, streetName);
+          const searchData = searchResult.formatted;
           
           console.log('✅ [PARALLEL] Search data completed');
-          return {
-            type: 'search_data',
-            data: {
-              searchData: searchData || 'Không có dữ liệu search phù hợp từ internet.',
-              price_gov: price_gov
-            },
-            success: true
-          };
+                      return {
+              type: 'search_data',
+              data: searchData || 'Không có dữ liệu search phù hợp từ internet.',
+              jsonData: searchResult.json,
+              sources: searchResult.sources,
+              success: true
+            };
         } catch (error) {
           console.error('❌ [PARALLEL] Search data error:', error);
           return {
@@ -555,6 +559,8 @@ export async function POST(request: NextRequest) {
     let sharedSearchData = 'Không có dữ liệu search từ internet.';
     let sharedMarketData = 'Không có dữ liệu thị trường cho khu vực này.';
     let sharedPriceGov = '';
+    let aiRealEstateData = null;
+    let searchSources: string[] = [];
 
     parallelResults.forEach((taskResult, index) => {
       if (taskResult.status === 'fulfilled') {
@@ -585,6 +591,9 @@ export async function POST(request: NextRequest) {
             } else {
               sharedSearchData = data;
             }
+            sharedSearchData = data;
+            aiRealEstateData = (taskValue as any).jsonData;
+            searchSources = (taskValue as any).sources || [];
             console.log(`✅ Search Data: ${success ? 'Success' : 'Failed'}`);
             break;
         }
@@ -762,6 +771,10 @@ export async function POST(request: NextRequest) {
 
     result.performance.step_times.ai_execution = Date.now() - aiStart;
 
+    // Set AI real estate data
+    result.ai_real_estate_data = aiRealEstateData;
+    result.search_sources = searchSources;
+    
     // Calculate performance metrics
     const totalTime = Date.now() - startTime;
     result.performance.total_time = totalTime;
