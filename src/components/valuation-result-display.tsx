@@ -3,6 +3,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
@@ -813,6 +814,86 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
               </div>
             )}
           </div>
+
+          {/* Bảng giá đất Nhà nước */}
+          {data.price_gov_data && (() => {
+            let pg: any = null;
+            try {
+              pg = typeof data.price_gov_data === 'string' ? JSON.parse(data.price_gov_data) : data.price_gov_data;
+            } catch (e) {
+              pg = null;
+            }
+            if (!pg) return null;
+
+            const vtKeys = ['VT1', 'VT2', 'VT3', 'VT4'].filter(k => pg[k]);
+
+            const vtDescriptions: Record<string, string> = {
+              VT1: 'Thửa đất của một chủ sử dụng có ít nhất một mặt giáp đường/phố có tên trong bảng giá. Vị trí thuận lợi nhất.',
+              VT2: 'Thửa đất có ít nhất một mặt giáp ngõ/hẻm, mặt cắt ngõ ≥ 4,5m.',
+              VT3: 'Thửa đất giáp ngõ có mặt cắt từ 3m đến dưới 4,5m.',
+              VT4: 'Thửa đất giáp ngõ có mặt cắt dưới 3m. Vị trí kém thuận lợi nhất.'
+            };
+            if (vtKeys.length === 0) return null;
+
+            const formatGovPrice = (value: string | number) => {
+              // Chuyển chuỗi "173.420.000" => 173420000
+              const cleaned = value.toString().replace(/[^0-9]/g, '');
+              const num = parseInt(cleaned, 10);
+              if (isNaN(num) || num <= 0) return 'N/A';
+              // Đổi sang đơn vị triệu VND/m²
+              return `${(num / 1_000_000).toFixed(1)} triệu/m²`;
+            };
+
+            return (
+              <div className="mt-6">
+                <Separator className="my-4" />
+                <div className="space-y-3">
+                  {(() => {
+                    const headerParts: string[] = [];
+                    if (pg['Đường']) headerParts.push(pg['Đường']);
+                    if (pg['Quận']) headerParts.push(pg['Quận']);
+                    const headerLocation = headerParts.join(', ');
+                    return (
+                      <h4 className="text-slate-800 font-medium flex items-center gap-2">
+                        <FileCheck className="h-4 w-4 text-blue-600" />
+                        Bảng giá đất Nhà nước {headerLocation && `(${headerLocation})`}
+                      </h4>
+                    );
+                  })()}
+                  <TooltipProvider>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {vtKeys.map(key => (
+                        <Tooltip key={key}>
+                          <TooltipTrigger asChild>
+                            <div className="professional-card p-4 text-center cursor-help">
+                              <p className="text-xs text-slate-600 mb-1">{key}</p>
+                              <p className="text-lg font-semibold text-slate-800">{formatGovPrice(pg[key])}</p>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-center">
+                            {vtDescriptions[key] || ''}
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </TooltipProvider>
+                  {(() => {
+                    const lineParts: string[] = [];
+                    // if (pg['Đường']) lineParts.push(pg['Đường']);
+                    // if (pg['Quận']) lineParts.push(pg['Quận']);
+                    // const firstLine = lineParts.join(', ');
+                    const segment = pg['Đoạn (từ–đến)'] || pg['Đoạn (từ-den)'] || '';
+                    return (
+                      <p className="text-xs text-gray-500 mt-2 text-center whitespace-pre-line">
+                        {/* {firstLine} */}
+                        {segment && (<><br/>Đoạn: {segment}</>)}
+                      </p>
+                    );
+                  })()}
+                </div>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 
