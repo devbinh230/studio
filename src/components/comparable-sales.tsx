@@ -6,9 +6,21 @@ import { Badge } from '@/components/ui/badge';
 import { BedDouble, Bath, LayoutPanelLeft, TrendingUp, MapPin, Sparkles, Home } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CombinedResult, RealEstate } from '@/lib/types';
+import { ExternalLink } from 'lucide-react';
 
 interface ComparableSalesProps {
   result?: CombinedResult;
+}
+
+interface AIRealEstateData {
+  "giá trung bình": number;
+  "các tin rao bán": Array<{
+    "tiêu đề": string;
+    "giá": number;
+    "diện tích": number;
+    "địa chỉ": string;
+    "link": string;
+  }>;
 }
 
 interface TransformedProperty {
@@ -24,6 +36,7 @@ interface TransformedProperty {
   status: { label: string; className: string };
   pricePerM2: number;
   type: string;
+  link?: string; // Optional link for AI data
 }
 
 const formatCurrency = (value: number) => {
@@ -51,12 +64,26 @@ const getStatusBadge = (pricePerM2: number) => {
   }
 };
 
+// Trả về nhãn hiển thị cho badge địa chỉ: ưu tiên Đường + Phường
 const getDistrictName = (addressDetail: string) => {
-  const parts = addressDetail.split(' - ');
-  if (parts.length >= 2) {
-    return parts[1].replace('Quận ', '').replace('Huyện ', '').replace('Thành phố ', '');
+  if (!addressDetail) return 'Không xác định';
+
+  // Chuẩn hoá và tách theo dấu phẩy (,) – định dạng phổ biến
+  let parts = addressDetail.split(',').map((p) => p.trim()).filter(Boolean);
+
+  // Nếu không có dấu phẩy thì thử với dấu gạch ngang ( - )
+  if (parts.length <= 1) {
+    parts = addressDetail.split(' - ').map((p) => p.trim()).filter(Boolean);
   }
-  return 'Không xác định';
+
+  if (parts.length >= 2) {
+    const street = parts[0].replace(/^Đường\s+/i, '');
+    const ward = parts[1].replace(/^Phường\s+/i, '').replace(/^Xã\s+/i, '');
+    return `${street}, ${ward}`;
+  }
+
+  // Fallback: trả về phần đầu tiên hoặc 'Không xác định'
+  return parts[0] || 'Không xác định';
 };
 
 const generateBedsBaths = (area: number) => {
@@ -74,7 +101,8 @@ export function ComparableSales({ result }: ComparableSalesProps) {
     setIsMounted(true);
   }, []);
 
-  // Get real estates data from API result with proper null checking
+  // Try to get AI real estate data first, then fallback to API data
+  const aiRealEstateData = (result as any)?.ai_real_estate_data as AIRealEstateData | null;
   const realEstates = result && 'valuation_result' in result && result.valuation_result?.realEstates
     ? result.valuation_result.realEstates.slice(0, 3)
     : [];
@@ -86,8 +114,32 @@ export function ComparableSales({ result }: ComparableSalesProps) {
     'https://masterisevietnam.com/wp-content/uploads/2021/06/phong-bep-1-ngu-masteri-west-heights.jpg'
   ];
 
+  // Transform AI real estate data to component format
+  const aiComparableProperties: TransformedProperty[] = aiRealEstateData?.["các tin rao bán"] 
+    ? aiRealEstateData["các tin rao bán"].map((listing, index) => {
+        const pricePerM2 = listing["diện tích"] > 0 ? listing["giá"] / listing["diện tích"] : 0;
+        const { beds, baths } = generateBedsBaths(listing["diện tích"]);
+        
+        return {
+          id: `ai-${index}`,
+          title: listing["tiêu đề"],
+          address: listing["địa chỉ"],
+          price: listing["giá"],
+          area: listing["diện tích"],
+          beds,
+          baths,
+          image: demoImages[index] || demoImages[0],
+          district: getDistrictName(listing["địa chỉ"]),
+          status: getStatusBadge(pricePerM2),
+          pricePerM2,
+          type: 'ai-listing',
+          link: listing["link"] ? listing["link"].replace(/\\+$/, '') : undefined // Clean up trailing backslashes
+        };
+      })
+    : [];
+
   // Transform API data to component format
-  const comparableProperties: TransformedProperty[] = realEstates.map((estate: RealEstate, index: number) => {
+  const apiComparableProperties: TransformedProperty[] = realEstates.map((estate: RealEstate, index: number) => {
     const pricePerM2 = estate.area > 0 ? estate.totalPrice / estate.area : 0;
     const { beds, baths } = generateBedsBaths(estate.area);
     
@@ -107,6 +159,10 @@ export function ComparableSales({ result }: ComparableSalesProps) {
     };
   });
 
+  // Use AI data if available, otherwise use API data
+  const comparableProperties = aiComparableProperties.length > 0 ? aiComparableProperties : apiComparableProperties;
+  const averagePrice = aiRealEstateData ? aiRealEstateData["giá trung bình"] : 0;
+
   // Show placeholder message if no data
   if (!result || comparableProperties.length === 0) {
     return (
@@ -118,7 +174,7 @@ export function ComparableSales({ result }: ComparableSalesProps) {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-800">BĐS tương đương</h3>
+                <h3 className="text-lg font-bold text-slate-800">BĐS tương tự</h3>
                 <Sparkles className="h-4 w-4 text-orange-500" />
               </div>
               <p className="text-sm text-slate-600 font-normal">Thị trường gần đây</p>
@@ -147,52 +203,84 @@ export function ComparableSales({ result }: ComparableSalesProps) {
               <h3 className="text-lg font-bold text-slate-800">BĐS tương đương</h3>
               <Sparkles className="h-4 w-4 text-orange-500" />
             </div>
-            <p className="text-sm text-slate-600 font-normal">Thị trường gần đây</p>
+            <p className="text-sm text-slate-600 font-normal">
+              {aiComparableProperties.length > 0 ? 'Dữ liệu AI Search' : 'Thị trường gần đây'}
+            </p>
           </div>
         </CardTitle>
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {comparableProperties.map((prop: TransformedProperty) => (
-          <article 
-            key={prop.id} 
-            className="group p-4 bg-white/80 rounded-xl border border-orange-100 hover:bg-white hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
-          >
-            <div className="flex gap-4">
-              <div className="relative">
-                <Image
-                  src={prop.image}
-                  alt={`Hình ảnh của ${prop.title}`}
-                  width={80}
-                  height={80}
-                  className="rounded-lg object-cover aspect-square shadow-sm"
-                />
-                <Badge className={`absolute -top-2 -right-2 text-xs ${prop.status.className}`}>
-                  {prop.status.label}
-                </Badge>
-              </div>
-              
-              <div className="flex-1 space-y-2">
-                {/* Price and District */}
-                <div className="flex items-center justify-between">
-                  <p className="text-lg font-bold text-orange-700">
-                    {isMounted ? formatCurrency(prop.price) : '...'}
-                  </p>
-                  <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {prop.district}
-                  </Badge>
-                </div>
-                
-                {/* Title */}
-                <p className="text-sm font-medium text-slate-700 leading-tight line-clamp-2">
-                  {prop.title}
-                </p>
-                
-                {/* Address */}
-                <p className="text-xs text-slate-500 leading-tight line-clamp-1">
-                  {prop.address}
-                </p>
+        {comparableProperties.map((prop: TransformedProperty) => {
+          const CardWrapper = prop.link ? 'a' : 'div';
+          const cardProps = prop.link ? {
+            href: prop.link,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            title: 'Click để xem chi tiết tại nguồn',
+            className: 'group block p-4 bg-white/80 rounded-xl border border-orange-100 hover:bg-white hover:shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer hover:border-orange-300 no-underline hover:shadow-orange-100'
+          } : {
+            className: 'group p-4 bg-white/80 rounded-xl border border-orange-100 hover:bg-white hover:shadow-md transition-all duration-300 hover:scale-[1.02]'
+          };
+
+          return (
+            <article key={prop.id}>
+              <CardWrapper {...cardProps}>
+                <div className="flex gap-4">
+                  <div className="relative">
+                    <Image
+                      src={prop.image}
+                      alt={`Hình ảnh của ${prop.title}`}
+                      width={80}
+                      height={80}
+                      className="rounded-lg object-cover aspect-square shadow-sm"
+                    />
+                    <Badge className={`absolute -top-2 -right-2 text-xs ${prop.status.className}`}>
+                      {prop.status.label}
+                    </Badge>
+                    {prop.link && (
+                      <div className="absolute -top-1 -left-1 w-3 h-3 bg-orange-500 rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="w-full h-full bg-orange-400 rounded-full animate-pulse"></div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 space-y-2">
+                    {/* Price and District */}
+                    <div className="flex items-center justify-between">
+                      <p className={`text-lg font-bold transition-colors duration-300 ${prop.link ? 'text-orange-700 group-hover:text-orange-800' : 'text-orange-700'}`}>
+                        {isMounted ? formatCurrency(prop.price) : '...'}
+                      </p>
+                      <Badge variant="outline" className={`bg-orange-50 text-orange-700 border-orange-200 transition-colors duration-300 ${prop.link ? 'group-hover:bg-orange-100 group-hover:border-orange-300' : ''}`}>
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {prop.district}
+                      </Badge>
+                    </div>
+                    
+                    {/* Title */}
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-medium leading-tight line-clamp-2 flex-1 transition-colors duration-300 ${prop.link ? 'text-slate-700 group-hover:text-slate-900' : 'text-slate-700'}`}>
+                        {prop.title}
+                      </p>
+                      {prop.link && (
+                        <div className="text-orange-600 group-hover:text-orange-800 transition-all duration-300 flex-shrink-0 group-hover:scale-110">
+                          <ExternalLink className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Address with link styling */}
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xs leading-tight line-clamp-1 flex-1 transition-colors duration-300 ${prop.link ? 'text-orange-600 font-medium group-hover:text-orange-800' : 'text-slate-500'}`}>
+                        {prop.address}
+                      </p>
+                      {prop.link && (
+                        <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200 text-xs group-hover:bg-orange-100 group-hover:border-orange-300 transition-colors duration-300">
+                          <ExternalLink className="h-3 w-3 mr-1 group-hover:rotate-12 transition-transform duration-300" />
+                          Xem
+                        </Badge>
+                      )}
+                    </div>
                 
                 {/* Property Details */}
                 <div className="flex items-center gap-2 flex-wrap">
@@ -215,20 +303,44 @@ export function ComparableSales({ result }: ComparableSalesProps) {
                 </div>
               </div>
             </div>
-          </article>
-        ))}
+          </CardWrapper>
+        </article>
+      );
+    })}
         
         {/* Summary Section */}
         <div className="mt-6 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl border border-orange-200">
           <div className="text-center">
-            <p className="text-sm font-semibold text-slate-700 mb-2">Giá trung bình thị trường</p>
+            <p className="text-sm font-semibold text-slate-700 mb-2">Giá trung bình/m² khu vực</p>
             <p className="text-xl font-bold text-orange-700">
-              {isMounted && comparableProperties.length > 0 ? formatCurrency(
-                comparableProperties.reduce((sum: number, prop: TransformedProperty) => sum + prop.pricePerM2, 0) / comparableProperties.length
-              ) : '...'}
+              {isMounted && (() => {
+                // Tính giá trung bình/m² một cách nhất quán
+                if (averagePrice > 0) {
+                  // Nếu có dữ liệu AI, kiểm tra xem đây có phải giá/m² không
+                  // Nếu averagePrice > 100 triệu thì có thể là giá tổng, cần chia cho diện tích trung bình
+                  if (averagePrice > 100000000) {
+                    // Đây có thể là giá tổng, tính lại giá/m² từ comparable properties
+                    const avgPricePerM2 = comparableProperties.length > 0 ? 
+                      comparableProperties.reduce((sum: number, prop: TransformedProperty) => sum + prop.pricePerM2, 0) / comparableProperties.length : 0;
+                    return formatCurrency(avgPricePerM2);
+                  } else {
+                    // Đây đã là giá/m²
+                    return formatCurrency(averagePrice);
+                  }
+                } else if (comparableProperties.length > 0) {
+                  // Tính giá trung bình/m² từ comparable properties
+                  const avgPricePerM2 = comparableProperties.reduce((sum: number, prop: TransformedProperty) => sum + prop.pricePerM2, 0) / comparableProperties.length;
+                  return formatCurrency(avgPricePerM2);
+                } else {
+                  return '...';
+                }
+              })()}
             </p>
             <p className="text-xs text-slate-600 mt-1">
-              Giá/m² từ {comparableProperties.length} BDS tương đương
+              {averagePrice > 0 ? 
+                `Từ ${aiRealEstateData?.["các tin rao bán"]?.length || 0} tin rao bán (AI Search)` :
+                `Từ ${comparableProperties.length} BDS tương đương trong khu vực`
+              }
             </p>
           </div>
         </div>
