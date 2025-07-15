@@ -529,7 +529,8 @@ export async function POST(request: NextRequest) {
           console.log('✅ [PARALLEL] Search data completed');
                       return {
               type: 'search_data',
-              data: searchData || 'Không có dữ liệu search phù hợp từ internet.',
+              data: {searchData: searchData || 'Không có dữ liệu search phù hợp từ internet.',
+                price_gov: price_gov},
               jsonData: searchResult.json,
               sources: searchResult.sources,
               success: true
@@ -591,7 +592,6 @@ export async function POST(request: NextRequest) {
             } else {
               sharedSearchData = data;
             }
-            sharedSearchData = data;
             aiRealEstateData = (taskValue as any).jsonData;
             searchSources = (taskValue as any).sources || [];
             console.log(`✅ Search Data: ${success ? 'Success' : 'Failed'}`);
@@ -669,7 +669,7 @@ export async function POST(request: NextRequest) {
       console.log('🏪 Utilities Data Count:', result.utilities?.data?.length || 0);
       console.log('📊 Market Data Length:', sharedMarketData ? sharedMarketData.length : 0);
       console.log('📊 Market Data Preview:', sharedMarketData ? sharedMarketData.substring(0, 200) + '...' : 'NO MARKET DATA');
-      console.log('🔍 Search Data Length:', sharedSearchData ? sharedSearchData.length : 0);
+      console.log('🔍 Search Data Length:', sharedSearchData ? (sharedSearchData.length || 0) : 0);
       console.log('🔍 Search Data Preview:', sharedSearchData ? sharedSearchData.substring(0, 200) + '...' : 'NO SEARCH DATA');
       console.log('💰 Price Gov:', sharedAIInput.price_gov);
       console.log('='.repeat(50));
