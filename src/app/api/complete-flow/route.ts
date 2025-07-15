@@ -487,6 +487,7 @@ export async function POST(request: NextRequest) {
               function normalizeDistrictName(name: string): string {
                 if (!name) return '';
                 let n = name.toLowerCase().replace(/^(quận|huyện|thành phố)\s+/g, '');
+                n = n.replace('quan_', '')
                 n = n.replace(/_/g, ' ');
                 n = n.replace(/đ/g, 'd').replace(/Đ/g, 'D');
                 n = n.normalize('NFD').replace(/\p{Diacritic}/gu, '');
@@ -692,7 +693,7 @@ export async function POST(request: NextRequest) {
         console.log('✅ AI Combined API completed successfully');
         
         // DEBUG: Log the full response structure
-        console.log('🔍 AI Combined Response Structure:', JSON.stringify(aiCombinedData, null, 2));
+        // console.log('🔍 AI Combined Response Structure:', JSON.stringify(aiCombinedData, null, 2));
         console.log('🔍 Results Object:', aiCombinedData.results);
         console.log('🔍 Valuation Data:', aiCombinedData.results?.valuation);
         console.log('🔍 Analysis Data:', aiCombinedData.results?.analysis);

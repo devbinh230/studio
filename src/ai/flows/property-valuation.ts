@@ -380,7 +380,10 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   if (!response.output) {
     throw new Error('No output received from AI model');
   }
-  return response.output;
+  return {
+    ...response.output,
+    price_gov_place,
+  };
 }
 
 const PropertyValuationRangeLLMInputSchema = PropertyValuationRangeInputSchema.extend({

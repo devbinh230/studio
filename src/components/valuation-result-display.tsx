@@ -405,12 +405,14 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                   {formatCurrency(result.housePrice)}
                 </span>
               </div>
-              <div>
-                <span className="text-slate-600">Giá theo quy định: </span>
-                <span className="font-semibold text-blue-600">
-                  {formatCurrency(result.price_gov_place)}
-                </span>
-              </div>
+              {result.price_gov_place > 0 && !isNaN(result.price_gov_place) && (
+                <div>
+                  <span className="text-slate-600">Giá theo quy định: </span>
+                  <span className="font-semibold text-blue-600">
+                    {formatCurrency(result.price_gov_place)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
