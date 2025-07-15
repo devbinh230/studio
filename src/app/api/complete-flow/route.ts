@@ -118,6 +118,8 @@ export async function POST(request: NextRequest) {
       ai_valuation: null,
       ai_analysis: null,
       distance_analysis: null,
+      ai_real_estate_data: null, // Initialize AI real estate data
+      search_sources: [], // Initialize search sources
       success: false,
       error: null,
       performance: {
