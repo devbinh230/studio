@@ -42,13 +42,14 @@ const PropertyValuationRangeInputSchema = z.object({
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
-// Thêm giá nhà nước (price_gov_place) vào schema output
+// Thêm giá nhà nước (price_gov_place) và ai_real_estate_data vào schema output
 const PropertyValuationRangeOutputSchema = z.object({
   lowValue: z.number().describe('Giá thấp nhất có thể cho bất động sản.'),
   reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản.'),
   highValue: z.number().describe('Giá cao nhất có thể đạt được cho bất động sản.'),
   price_house: z.number().describe('Giá nhà tham khảo.'),
   price_gov_place: z.number().describe('Giá theo quy định nhà nước cho vị trí lô đất.'),
+  ai_real_estate_data: z.any().describe('Dữ liệu AI về bất động sản từ search data.').optional(),
 });
 export type PropertyValuationRangeOutput = z.infer<typeof PropertyValuationRangeOutputSchema>;
 
@@ -261,9 +262,54 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
       }
     }
 
-    // 2) Fallback – try old brace matching method
+    // 2) Try parsing direct JSON object
     try {
-      const jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/i);
+      const parsed = JSON.parse(searchData);
+      if (parsed && typeof parsed === 'object') {
+        // Check for new format with underscores
+        if (parsed["gia_trung_binh"]) {
+          const avgPrice = typeof parsed["gia_trung_binh"] === 'number' 
+            ? parsed["gia_trung_binh"] 
+            : parseFloat(parsed["gia_trung_binh"]);
+          if (!isNaN(avgPrice)) {
+            return avgPrice; // Assume it's already in VND/m2
+          }
+        }
+        
+        // Check for old format with spaces
+        if (parsed["giá trung bình"]) {
+          const avgPrice = typeof parsed["giá trung bình"] === 'number' 
+            ? parsed["giá trung bình"] 
+            : parseFloat(parsed["giá trung bình"]);
+          if (!isNaN(avgPrice)) {
+            return avgPrice; // Assume it's already in VND/m2
+          }
+        }
+        
+        // Fallback to recursive search
+        const avg = findAvgPrice(parsed);
+        if (avg && !isNaN(avg)) {
+          return avg;
+        }
+      }
+    } catch {
+      // Not valid JSON, continue with other methods
+    }
+
+    // 3) Fallback – try old brace matching method for both formats
+    try {
+      // Try new format first
+      let jsonMatch = searchData.match(/\{[\s\S]*"gia_trung_binh"[\s\S]*\}/i);
+      if (jsonMatch) {
+        const jsonData = JSON.parse(jsonMatch[0]);
+        const avg = findAvgPrice(jsonData);
+        if (avg && !isNaN(avg)) {
+          return avg;
+        }
+      }
+      
+      // Try old format
+      jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/i);
       if (jsonMatch) {
         const jsonData = JSON.parse(jsonMatch[0]);
         const avg = findAvgPrice(jsonData);
@@ -275,7 +321,7 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
       // ignore
     }
 
-    // 3) Regex scan for price patterns in plain text
+    // 4) Regex scan for price patterns in plain text
     const searchPricePatterns = [
       /Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*(?:VND|VNĐ)?\/?m²?/i,
       /average price[:\s]*([\d\.]+)\s*vnd\s*\/\s*m2/i,
@@ -297,6 +343,108 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
   }
   
   return 0;
+}
+
+// Helper function to extract AI real estate data from searchData
+function extractAIRealEstateData(searchData?: string): any {
+  if (!searchData) return null;
+
+  // 1) Try parsing direct JSON object
+  try {
+    const parsed = JSON.parse(searchData);
+    if (parsed && typeof parsed === 'object') {
+      // Check for new format with underscores
+      if (parsed["cac_tin_rao_ban"]) {
+        return {
+          "giá trung bình": parsed["gia_trung_binh"],
+          "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
+            "tiêu đề": item["tieu_de"],
+            "giá": item["gia"],
+            "diện tích": item["dien_tich"],
+            "địa chỉ": item["dia_chi"],
+            "link": item["link"]
+          }))
+        };
+      }
+      // Check for old format with spaces
+      if (parsed["các tin rao bán"]) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Not valid JSON, continue with other methods
+  }
+
+  // 2) Look for fenced code block with json language
+  const fenceRegexes = [
+    /```json[\s\S]*?```/i,
+    /```[\s\S]*?```/ // generic
+  ];
+  for (const reg of fenceRegexes) {
+    const fenceMatch = searchData.match(reg);
+    if (fenceMatch) {
+      // Remove the backticks and optional language tag
+      const jsonText = fenceMatch[0].replace(/```json/i, '').replace(/```/g, '').trim();
+      try {
+        const parsed = JSON.parse(jsonText);
+        if (parsed && typeof parsed === 'object') {
+          // Check for new format with underscores
+          if (parsed["cac_tin_rao_ban"]) {
+            return {
+              "giá trung bình": parsed["gia_trung_binh"],
+              "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
+                "tiêu đề": item["tieu_de"],
+                "giá": item["gia"],
+                "diện tích": item["dien_tich"],
+                "địa chỉ": item["dia_chi"],
+                "link": item["link"]
+              }))
+            };
+          }
+          // Check for old format with spaces
+          if (parsed["các tin rao bán"]) {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore parse error, continue
+      }
+    }
+  }
+
+  // 3) Try old brace matching method for both formats
+  try {
+    // Try new format first
+    let jsonMatch = searchData.match(/\{[\s\S]*"cac_tin_rao_ban"[\s\S]*\}/i);
+    if (jsonMatch) {
+      const jsonData = JSON.parse(jsonMatch[0]);
+      if (jsonData && typeof jsonData === 'object' && jsonData["cac_tin_rao_ban"]) {
+        return {
+          "giá trung bình": jsonData["gia_trung_binh"],
+          "các tin rao bán": jsonData["cac_tin_rao_ban"].map((item: any) => ({
+            "tiêu đề": item["tieu_de"],
+            "giá": item["gia"],
+            "diện tích": item["dien_tich"],
+            "địa chỉ": item["dia_chi"],
+            "link": item["link"]
+          }))
+        };
+      }
+    }
+    
+    // Try old format
+    jsonMatch = searchData.match(/\{[\s\S]*"các tin rao bán"[\s\S]*\}/i);
+    if (jsonMatch) {
+      const jsonData = JSON.parse(jsonMatch[0]);
+      if (jsonData && typeof jsonData === 'object' && jsonData["các tin rao bán"]) {
+        return jsonData;
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
 }
 
 // Calculate reasonableValue using price.py logic
@@ -369,6 +517,11 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   // Calculate price_gov_place based on VT rules
   const price_gov_place = getPriceGovPlace(input);
   console.log("price_gov_place: ",price_gov_place)
+  
+  // Extract AI real estate data from searchData
+  const ai_real_estate_data = extractAIRealEstateData(input.searchData);
+  console.log("ai_real_estate_data: ", ai_real_estate_data)
+  
   // Prepare input for AI with calculated values
   const aiInput: PropertyValuationRangeLLMInput = {
     ...input,
@@ -383,6 +536,7 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   return {
     ...response.output,
     price_gov_place,
+    ai_real_estate_data,
   };
 }
 
@@ -453,6 +607,9 @@ const propertyValuationRangeFlow = ai.defineFlow(
     const price_house = calculateConstructionPrice(input);
     const price_gov_place = getPriceGovPlace(input);
 
+    // Extract AI real estate data from searchData
+    const ai_real_estate_data = extractAIRealEstateData(input.searchData);
+
     // Prepare input for AI with calculated values
     const aiInput: PropertyValuationRangeLLMInput = {
       ...input,
@@ -467,6 +624,7 @@ const propertyValuationRangeFlow = ai.defineFlow(
     return {
       ...response.output,
       price_gov_place,
+      ai_real_estate_data,
     };
   }
 );

@@ -273,7 +273,7 @@ Dữ liệu thị trường bất động sản (12 tháng gần nhất):
                             <div className="text-sm">
                               <div>Thấp: {formatPrice(result.output.lowValue)} VNĐ</div>
                               <div>Cao: {formatPrice(result.output.highValue)} VNĐ</div>
-                              <div>Giá nhà: {formatPrice(result.output.price_house)} VNĐ</div>
+                              {/* <div>Giá nhà: {formatPrice(result.output.price_house)} VNĐ</div> */}
                             </div>
                           </div>
                         </div>

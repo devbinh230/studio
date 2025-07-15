@@ -113,7 +113,7 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult & {
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia thẩm định giá bất động sản, output ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link. Các dữ liệu cần được xem xét về yếu tố thời gian trong năm 2025 tháng 7. Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
+          "content": "Bạn là chuyên gia thẩm định giá bất động sản. Hãy trả về kết quả duy nhất dưới dạng một đối tượng JSON (không kèm văn bản hay chú thích nào khác), với cấu trúc và kiểu dữ liệu như sau:\n\n{\n  \"gia_trung_binh\": <number>,      // Giá trung bình khu vực theo đường, đơn vị VND/m2\n  \"cac_tin_rao_ban\": [             // Mảng các tin rao bán bất động sản tương tự\n    {\n      \"tieu_de\": <string>,         // Tiêu đề tin rao\n      \"gia\": <number>,    // Giá đăng bán (ví dụ: \"1200000000 VND\")\n      \"dien_tich\": <number>,       // Diện tích (m2)\n      \"dia_chi\": <string>,         // Địa chỉ chi tiết\n      \"link\": <string>             // URL dẫn đến tin (chỉ xuất link trong trường này)\n    },\n    …\n  ]\n}\n\nYêu cầu bổ sung:\n- Dữ liệu tham khảo các tin đăng trong **tháng 7 năm 2025**, ưu tiên bất động sản cùng đường, cùng loại (nhà phố/hẻm), diện tích ±10% so với yêu cầu.\n- Không xuất bất kỳ trường hay nội dung nào ngoài cấu trúc JSON nêu trên."
         },
         {
           "role": "user",
@@ -556,24 +556,47 @@ function parseAIResponseJSON(content: string): AIRealEstateData | null {
     }
 
     const jsonStr = jsonMatch[0];
-    const parsed = JSON.parse(jsonStr);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (err) {
+      console.warn('❌ JSON.parse error:', err);
+      return null;
+    }
     
-    // Validate the structure
+    // If parsed has underscore keys, convert to Vietnamese format
+    if (parsed && typeof parsed === 'object' && parsed["cac_tin_rao_ban"]) {
+      const converted: AIRealEstateData = {
+        "giá trung bình": parsed["gia_trung_binh"],
+        "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
+          "tiêu đề": item["tieu_de"],
+          "giá": item["gia"],
+          "diện tích": item["dien_tich"],
+          "địa chỉ": item["dia_chi"],
+          "link": item["link"]
+        }))
+      } as AIRealEstateData;
+      console.log('✅ Parsed AI JSON (underscore format) -> converted:', {
+        avgPrice: converted["giá trung bình"],
+        listings: converted["các tin rao bán"].length
+      });
+      return converted;
+    }
+    
+    // Validate the old structure
     if (parsed && typeof parsed === 'object' && 
         'giá trung bình' in parsed && 
         'các tin rao bán' in parsed &&
         Array.isArray(parsed['các tin rao bán'])) {
-      
       console.log('✅ Successfully parsed AI JSON response:', {
         avgPrice: parsed['giá trung bình'],
         listings: parsed['các tin rao bán'].length
       });
-      
       return parsed as AIRealEstateData;
-    } else {
-      console.warn('❌ Invalid JSON structure in AI response');
-      return null;
     }
+
+    console.warn('❌ Invalid JSON structure in AI response');
+    return null;
   } catch (error) {
     console.warn('❌ Failed to parse JSON from AI response:', error);
     return null;

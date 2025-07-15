@@ -399,12 +399,12 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
                     'Chưa có thông tin'}
                 </span>
               </div>
-              <div>
+              {/* <div>
                 <span className="text-slate-600">Giá nhà: </span>
                 <span className="font-semibold text-orange-600">
                   {formatCurrency(result.housePrice)}
                 </span>
-              </div>
+              </div> */}
               {result.price_gov_place > 0 && !isNaN(result.price_gov_place) && (
                 <div>
                   <span className="text-slate-600">Giá theo quy định: </span>

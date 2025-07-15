@@ -12,7 +12,7 @@ export const config = {
     timeout: 120000, // 15 seconds timeout
     // Treat undefined as enabled (default true) unless explicitly set to 'false'
     enabled: process.env.PROXY_SERVER_ENABLED ? process.env.PROXY_SERVER_ENABLED === 'true' : true,
-    model: process.env.PROXY_SERVER_MODEL || 'pplx-o3', // Default model for proxy
+    model: process.env.PROXY_SERVER_MODEL || 'pplx-claude-4.0-sonnet', // Default model for proxy
   },
 
   // Resta.vn API Configuration
@@ -42,7 +42,7 @@ export const config = {
   // AI Models Configuration
   models: {
     proxy: {
-      search: process.env.PROXY_SEARCH_MODEL || 'pplx-o3',
+      search: process.env.PROXY_SEARCH_MODEL || 'pplx-claude-4.0-sonnet',
       fallback: process.env.PROXY_FALLBACK_MODEL || 'o3'
     },
     perplexity: {

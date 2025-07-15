@@ -13,11 +13,11 @@ interface ComparableSalesProps {
 }
 
 interface AIRealEstateData {
-  "giá trung bình": number;
+  "giá trung bình": string | number;
   "các tin rao bán": Array<{
     "tiêu đề": string;
-    "giá": number;
-    "diện tích": number;
+    "giá": string | number;
+    "diện tích": string | number;
     "địa chỉ": string;
     "link": string;
   }>;
@@ -50,6 +50,58 @@ const formatCurrency = (value: number) => {
       currency: 'VND',
       maximumFractionDigits: 0,
     }).format(value);
+};
+
+// Add parsing functions for Vietnamese format
+const parseVietnameseCurrency = (price: string | number): number => {
+  // If the input is already a number, return it directly
+  if (typeof price === 'number') return price;
+  
+  if (!price || typeof price !== 'string') return 0;
+  
+  // Remove citation marks like [6] and clean up
+  const cleaned = price.replace(/\[\d+\]/g, '').trim();
+  
+  // Handle different formats
+  if (cleaned.includes('tỷ')) {
+    const number = parseFloat(cleaned.replace(/[^\d.,]/g, '').replace(',', '.'));
+    return number * 1000000000; // Convert billion VND to VND
+  } else if (cleaned.includes('triệu') || cleaned.includes('tr')) {
+    const number = parseFloat(cleaned.replace(/[^\d.,]/g, '').replace(',', '.'));
+    return number * 1000000; // Convert million VND to VND
+  } else {
+    // Try to parse as raw number
+    const number = parseFloat(cleaned.replace(/[^\d]/g, ''));
+    return isNaN(number) ? 0 : number;
+  }
+};
+
+const parseVietnameseArea = (area: string | number): number => {
+  // If the input is already a number, return it directly
+  if (typeof area === 'number') return area;
+  
+  if (!area || typeof area !== 'string') return 0;
+  
+  // Remove citation marks like [6] and clean up
+  const cleaned = area.replace(/\[\d+\]/g, '').trim();
+  
+  // Extract number before m2 or m²
+  const match = cleaned.match(/(\d+(?:[.,]\d+)?)/);
+  if (match) {
+    return parseFloat(match[1].replace(',', '.'));
+  }
+  
+  return 0;
+};
+
+const parseVietnameseNumber = (numStr: string | number): number => {
+  if (typeof numStr === 'number') return numStr;
+  if (!numStr || typeof numStr !== 'string') return 0;
+  
+  // Remove citation marks like [6] and clean up
+  const cleaned = numStr.replace(/\[\d+\]/g, '').trim();
+  const number = parseFloat(cleaned.replace(/[^\d]/g, ''));
+  return isNaN(number) ? 0 : number;
 };
 
 const getStatusBadge = (pricePerM2: number) => {
@@ -103,6 +155,16 @@ export function ComparableSales({ result }: ComparableSalesProps) {
 
   // Try to get AI real estate data first, then fallback to API data
   const aiRealEstateData = (result as any)?.ai_real_estate_data as AIRealEstateData | null;
+  
+  // Debug logging to see what data we receive
+  console.log('🏠 ComparableSales Debug:', {
+    result_exists: !!result,
+    ai_real_estate_data_exists: !!aiRealEstateData,
+    ai_real_estate_data_structure: aiRealEstateData ? Object.keys(aiRealEstateData) : 'N/A',
+    ai_real_estate_data: aiRealEstateData,
+    full_result: result
+  });
+  
   const realEstates = result && 'valuation_result' in result && result.valuation_result?.realEstates
     ? result.valuation_result.realEstates.slice(0, 3)
     : [];
@@ -117,15 +179,30 @@ export function ComparableSales({ result }: ComparableSalesProps) {
   // Transform AI real estate data to component format
   const aiComparableProperties: TransformedProperty[] = aiRealEstateData?.["các tin rao bán"] 
     ? aiRealEstateData["các tin rao bán"].map((listing, index) => {
-        const pricePerM2 = listing["diện tích"] > 0 ? listing["giá"] / listing["diện tích"] : 0;
-        const { beds, baths } = generateBedsBaths(listing["diện tích"]);
+        // Parse Vietnamese formatted data
+        const parsedPrice = parseVietnameseCurrency(listing["giá"]);
+        const parsedArea = parseVietnameseArea(listing["diện tích"]);
+        const pricePerM2 = parsedArea > 0 ? parsedPrice / parsedArea : 0;
+        const { beds, baths } = generateBedsBaths(parsedArea);
+        
+        console.log('🏠 Processing AI listing:', {
+          index,
+          original_price: listing["giá"],
+          parsed_price: parsedPrice,
+          original_area: listing["diện tích"],
+          parsed_area: parsedArea,
+          price_per_m2: pricePerM2,
+          title: listing["tiêu đề"],
+          address: listing["địa chỉ"],
+          link: listing["link"]
+        });
         
         return {
           id: `ai-${index}`,
           title: listing["tiêu đề"],
           address: listing["địa chỉ"],
-          price: listing["giá"],
-          area: listing["diện tích"],
+          price: parsedPrice,
+          area: parsedArea,
           beds,
           baths,
           image: demoImages[index] || demoImages[0],
@@ -161,7 +238,20 @@ export function ComparableSales({ result }: ComparableSalesProps) {
 
   // Use AI data if available, otherwise use API data
   const comparableProperties = aiComparableProperties.length > 0 ? aiComparableProperties : apiComparableProperties;
-  const averagePrice = aiRealEstateData ? aiRealEstateData["giá trung bình"] : 0;
+  
+  // Handle both old and new format for average price
+  const averagePrice = aiRealEstateData ? 
+    (typeof aiRealEstateData["giá trung bình"] === 'number' ? 
+      aiRealEstateData["giá trung bình"] : 
+      parseVietnameseNumber(aiRealEstateData["giá trung bình"]) || 0) : 0;
+
+  console.log('🏠 Final comparable properties:', {
+    ai_properties_count: aiComparableProperties.length,
+    api_properties_count: apiComparableProperties.length,
+    using_ai_data: aiComparableProperties.length > 0,
+    average_price: averagePrice,
+    comparable_properties: comparableProperties
+  });
 
   // Show placeholder message if no data
   if (!result || comparableProperties.length === 0) {
@@ -314,31 +404,19 @@ export function ComparableSales({ result }: ComparableSalesProps) {
             <p className="text-sm font-semibold text-slate-700 mb-2">Giá trung bình/m² khu vực</p>
             <p className="text-xl font-bold text-orange-700">
               {isMounted && (() => {
-                // Tính giá trung bình/m² một cách nhất quán
-                if (averagePrice > 0) {
-                  // Nếu có dữ liệu AI, kiểm tra xem đây có phải giá/m² không
-                  // Nếu averagePrice > 100 triệu thì có thể là giá tổng, cần chia cho diện tích trung bình
-                  if (averagePrice > 100000000) {
-                    // Đây có thể là giá tổng, tính lại giá/m² từ comparable properties
-                    const avgPricePerM2 = comparableProperties.length > 0 ? 
-                      comparableProperties.reduce((sum: number, prop: TransformedProperty) => sum + prop.pricePerM2, 0) / comparableProperties.length : 0;
-                    return formatCurrency(avgPricePerM2);
-                  } else {
-                    // Đây đã là giá/m²
-                    return formatCurrency(averagePrice);
-                  }
-                } else if (comparableProperties.length > 0) {
-                  // Tính giá trung bình/m² từ comparable properties
+                // Calculate average price per m² consistently
+                if (comparableProperties.length > 0) {
+                  // Always calculate from comparable properties for accuracy
                   const avgPricePerM2 = comparableProperties.reduce((sum: number, prop: TransformedProperty) => sum + prop.pricePerM2, 0) / comparableProperties.length;
                   return formatCurrency(avgPricePerM2);
                 } else {
-                  return '...';
+                  return 'Chưa có dữ liệu';
                 }
               })()}
             </p>
             <p className="text-xs text-slate-600 mt-1">
-              {averagePrice > 0 ? 
-                `Từ ${aiRealEstateData?.["các tin rao bán"]?.length || 0} tin rao bán (AI Search)` :
+              {aiComparableProperties.length > 0 ? 
+                `Từ ${aiComparableProperties.length} tin rao bán (AI Search)` :
                 `Từ ${comparableProperties.length} BDS tương đương trong khu vực`
               }
             </p>
