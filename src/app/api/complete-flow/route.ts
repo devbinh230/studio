@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
       ai_valuation: any;
       ai_analysis: any;
       distance_analysis: any;
+      price_gov_data: any; // Bổ sung dữ liệu bảng giá nhà nước
       ai_real_estate_data: any; // Thêm AI real estate data từ search
       search_sources: string[]; // Thêm sources từ AI search
       success: boolean;
@@ -601,6 +602,15 @@ export async function POST(request: NextRequest) {
         console.error(`❌ Task ${index} failed:`, taskResult.reason);
       }
     });
+
+    // Gán dữ liệu bảng giá nhà nước vào kết quả (nếu có)
+    if (sharedPriceGov) {
+      try {
+        result.price_gov_data = JSON.parse(sharedPriceGov);
+      } catch (e) {
+        result.price_gov_data = sharedPriceGov; // fallback dạng chuỗi
+      }
+    }
 
     // Step 8: Run AI Combined with shared data (NO MORE DUPLICATE CALLS!)
     console.log('\n🤖 STEP 8: Running optimized AI Combined with shared data...');
