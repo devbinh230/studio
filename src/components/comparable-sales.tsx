@@ -12,6 +12,19 @@ interface ComparableSalesProps {
   result?: CombinedResult;
 }
 
+// New format with underscores (prioritized)
+interface AIRealEstateDataNew {
+  "gia_trung_binh": string | number;
+  "cac_tin_rao_ban": Array<{
+    "tieu_de": string;
+    "gia": string | number;
+    "dien_tich": string | number;
+    "dia_chi": string;
+    "link": string;
+  }>;
+}
+
+// Old format with spaces (fallback compatibility)
 interface AIRealEstateData {
   "giá trung bình": string | number;
   "các tin rao bán": Array<{
@@ -22,6 +35,9 @@ interface AIRealEstateData {
     "link": string;
   }>;
 }
+
+// Union type for both formats
+type AIRealEstateDataUnion = AIRealEstateDataNew | AIRealEstateData;
 
 interface TransformedProperty {
   id: string;
@@ -176,37 +192,78 @@ export function ComparableSales({ result }: ComparableSalesProps) {
     'https://masterisevietnam.com/wp-content/uploads/2021/06/phong-bep-1-ngu-masteri-west-heights.jpg'
   ];
 
+  // Helper functions to safely access data from both formats
+  const getListings = (data: AIRealEstateDataUnion): any[] => {
+    if ('cac_tin_rao_ban' in data) {
+      return data.cac_tin_rao_ban; // New format
+    } else if ('các tin rao bán' in data) {
+      return data["các tin rao bán"]; // Old format
+    }
+    return [];
+  };
+
+  const getListingField = (listing: any, field: 'title' | 'price' | 'area' | 'address' | 'link'): any => {
+    // Try new format first
+    switch (field) {
+      case 'title':
+        return listing["tieu_de"] || listing["tiêu đề"];
+      case 'price':
+        return listing["gia"] || listing["giá"];
+      case 'area':
+        return listing["dien_tich"] || listing["diện tích"];
+      case 'address':
+        return listing["dia_chi"] || listing["địa chỉ"];
+      case 'link':
+        return listing["link"];
+      default:
+        return undefined;
+    }
+  };
+
+  const getAveragePrice = (data: AIRealEstateDataUnion): number => {
+    let avgPrice: string | number;
+    if ('gia_trung_binh' in data) {
+      avgPrice = data.gia_trung_binh; // New format
+    } else if ('giá trung bình' in data) {
+      avgPrice = data["giá trung bình"]; // Old format
+    } else {
+      return 0;
+    }
+    
+    return typeof avgPrice === 'number' ? avgPrice : parseVietnameseNumber(avgPrice) || 0;
+  };
+
   // Transform AI real estate data to component format
-  const aiComparableProperties: TransformedProperty[] = aiRealEstateData?.["các tin rao bán"] 
-    ? aiRealEstateData["các tin rao bán"].map((listing, index) => {
+  const aiComparableProperties: TransformedProperty[] = aiRealEstateData 
+    ? getListings(aiRealEstateData).map((listing, index) => {
         // Parse Vietnamese formatted data
-        const parsedPrice = parseVietnameseCurrency(listing["giá"]);
-        const parsedArea = parseVietnameseArea(listing["diện tích"]);
+        const parsedPrice = parseVietnameseCurrency(getListingField(listing, 'price'));
+        const parsedArea = parseVietnameseArea(getListingField(listing, 'area'));
         const pricePerM2 = parsedArea > 0 ? parsedPrice / parsedArea : 0;
         const { beds, baths } = generateBedsBaths(parsedArea);
         
         console.log('🏠 Processing AI listing:', {
           index,
-          original_price: listing["giá"],
+          original_price: getListingField(listing, 'price'),
           parsed_price: parsedPrice,
-          original_area: listing["diện tích"],
+          original_area: getListingField(listing, 'area'),
           parsed_area: parsedArea,
           price_per_m2: pricePerM2,
-          title: listing["tiêu đề"],
-          address: listing["địa chỉ"],
+          title: getListingField(listing, 'title'),
+          address: getListingField(listing, 'address'),
           link: listing["link"]
         });
         
         return {
           id: `ai-${index}`,
-          title: listing["tiêu đề"],
-          address: listing["địa chỉ"],
+          title: getListingField(listing, 'title'),
+          address: getListingField(listing, 'address'),
           price: parsedPrice,
           area: parsedArea,
           beds,
           baths,
           image: demoImages[index] || demoImages[0],
-          district: getDistrictName(listing["địa chỉ"]),
+          district: getDistrictName(getListingField(listing, 'address')),
           status: getStatusBadge(pricePerM2),
           pricePerM2,
           type: 'ai-listing',
@@ -240,10 +297,7 @@ export function ComparableSales({ result }: ComparableSalesProps) {
   const comparableProperties = aiComparableProperties.length > 0 ? aiComparableProperties : apiComparableProperties;
   
   // Handle both old and new format for average price
-  const averagePrice = aiRealEstateData ? 
-    (typeof aiRealEstateData["giá trung bình"] === 'number' ? 
-      aiRealEstateData["giá trung bình"] : 
-      parseVietnameseNumber(aiRealEstateData["giá trung bình"]) || 0) : 0;
+  const averagePrice = aiRealEstateData ? getAveragePrice(aiRealEstateData) : 0;
 
   console.log('🏠 Final comparable properties:', {
     ai_properties_count: aiComparableProperties.length,

@@ -116,13 +116,17 @@ export async function POST(request: NextRequest) {
       type: 'town_house',
       landArea: 45.0,
       houseArea: 45.0,
-      laneWidth: 10.0,
+      laneWidth: 3.0, // FIXED: Changed from 10.0 to 3.0 to match ai-combined
       facadeWidth: 4.0,
       storyNumber: 3.0,
       bedRoom: 2,
       bathRoom: 2,
       legal: 'pink_book',
       yearBuilt: 2015,
+      // FIXED: Added missing fields to match ai-combined
+      alleyType: 'thong',
+      houseDirection: 'nam',
+      soShape: 'vuong',
     };
 
     const mergedDetails = { ...defaultDetails, ...property_details };
@@ -336,9 +340,15 @@ export async function POST(request: NextRequest) {
       marketData: marketData,
       searchData: searchData,
       price_gov: price_gov,
+      // FIXED: Added missing fields that affect price calculation
+      alleyType: mergedDetails.alleyType || 'thong',
+      houseDirection: mergedDetails.houseDirection || 'nam',
+      soShape: mergedDetails.soShape || 'vuong',
     };
 
-    console.log('📊 AI Input:', JSON.stringify(aiInput, null, 2));
+    console.log('📊 AI Input (formatted):', JSON.stringify(aiInput, null, 2));
+    console.log('🔍 AI Input (raw JSON for debug):', JSON.stringify(aiInput));
+    console.log('📏 AI Input size:', JSON.stringify(aiInput).length, 'characters');
     console.log(`⏱️  Step 3 time: ${Date.now() - step3Start}ms`);
 
     // Step 4: Call AI valuation

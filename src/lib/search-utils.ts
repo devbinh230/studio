@@ -21,6 +21,19 @@ interface AIProviderResult {
   sources?: string[];
 }
 
+// New format with underscores (prioritized)
+interface AIRealEstateDataNew {
+  "gia_trung_binh": number;
+  "cac_tin_rao_ban": Array<{
+    "tieu_de": string;
+    "gia": number;
+    "dien_tich": number;
+    "dia_chi": string;
+    "link": string;
+  }>;
+}
+
+// Old format with spaces (fallback compatibility)
 interface AIRealEstateData {
   "giá trung bình": number;
   "các tin rao bán": Array<{
@@ -32,11 +45,14 @@ interface AIRealEstateData {
   }>;
 }
 
+// Union type for both formats
+type AIRealEstateDataUnion = AIRealEstateDataNew | AIRealEstateData;
+
 
 
 interface SearchResult {
   formatted: string;
-  json: AIRealEstateData | null;
+  json: AIRealEstateDataUnion | null;
   sources: string[];
 }
 
@@ -113,7 +129,7 @@ async function callProxyServer(userPrompt: string): Promise<AIProviderResult & {
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia thẩm định giá bất động sản. Hãy trả về kết quả duy nhất dưới dạng một đối tượng JSON (không kèm văn bản hay chú thích nào khác), với cấu trúc và kiểu dữ liệu như sau:\n\n{\n  \"gia_trung_binh\": <number>,      // Giá trung bình khu vực theo đường, đơn vị VND/m2\n  \"cac_tin_rao_ban\": [             // Mảng các tin rao bán bất động sản tương tự\n    {\n      \"tieu_de\": <string>,         // Tiêu đề tin rao\n      \"gia\": <number>,    // Giá đăng bán (ví dụ: \"1200000000 VND\")\n      \"dien_tich\": <number>,       // Diện tích (m2)\n      \"dia_chi\": <string>,         // Địa chỉ chi tiết\n      \"link\": <string>             // URL dẫn đến tin (chỉ xuất link trong trường này)\n    },\n    …\n  ]\n}\n\nYêu cầu bổ sung:\n- Dữ liệu tham khảo các tin đăng trong **tháng 7 năm 2025**, ưu tiên bất động sản cùng đường, cùng loại (nhà phố/hẻm), diện tích ±10% so với yêu cầu.\n- Không xuất bất kỳ trường hay nội dung nào ngoài cấu trúc JSON nêu trên."
+          "content": "Bạn là chuyên gia thẩm định giá bất động sản. Hãy trả về kết quả duy nhất dưới dạng một đối tượng JSON (không kèm văn bản hay chú thích nào khác), với cấu trúc và kiểu dữ liệu như sau:\n\n{\n  \"gia_trung_binh\": <number>,      // Giá trung bình khu vực theo đường, đơn vị VND/m2\n  \"cac_tin_rao_ban\": [             // Mảng các tin rao bán bất động sản tương tự\n    {\n      \"tieu_de\": <string>,         // Tiêu đề tin rao\n      \"gia\": <number>,    // Giá đăng bán (ví dụ: \"1200000000 VND\")\n      \"dien_tich\": <number>,       // Diện tích (m2)\n      \"dia_chi\": <string>,         // Địa chỉ chi tiết\n      \"link\": <string>             // URL dẫn đến tin (chỉ xuất link trong trường này)\n    },\n    …\n  ]\n}\n\nYêu cầu bổ sung:\n- Dữ liệu tham khảo các tin đăng trong **tháng 7 năm 2025**, ưu tiên bất động sản cùng đường, cùng loại (nhà phố/hẻm), diện tích ±20% so với yêu cầu.\n- Không xuất bất kỳ trường hay nội dung nào ngoài cấu trúc JSON nêu trên."
         },
         {
           "role": "user",
@@ -239,7 +255,7 @@ async function callPerplexityAPI(userPrompt: string): Promise<AIProviderResult &
       "messages": [
         {
           "role": "system",
-          "content": "Bạn là chuyên gia thẩm định giá bất động sản, output ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự, vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link. Các dữ liệu cần được xem xét về yếu tố thời gian trong năm 2025 tháng 7. Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
+          "content": "Bạn là chuyên gia thẩm định giá bất động sản, output ngắn gọn, tập trung vào giá trị thực tế. Kết quả trả về phải là một object JSON với các trường: - \"giá trung bình\": Giá trung bình khu vực theo đường, đơn vị VND/m2. - \"các tin rao bán\": Danh sách các tin rao bán bất động sản tương tự (cùng đường, diện tích tương tự (không bắt buộc), vị trí nhà phố/hẻm) từ các website bất động sản uy tín, mỗi tin gồm: tiêu đề, giá, diện tích, địa chỉ, link. Các dữ liệu cần được xem xét về yếu tố thời gian trong năm 2025. Không trả về bất kỳ link url ngoài trường \"link\" trong từng tin rao, không trả về text ngoài JSON."
         },
         {
           "role": "user",
@@ -353,17 +369,24 @@ export async function searchRealEstateData(location: string, parsedAddress?: any
       return typeMap[type] || type;
     };
 
-    // Format: tên đường + phường + quận + thành phố + loại bất động sản
-    let userPrompt = `Tìm kiếm các bất động sản `;
-    if (street) userPrompt += `${street} `;
-    if (ward) userPrompt += `${ward} `;
-    if (district) userPrompt += `${district} `;
-    if (city) userPrompt += `${city} `;
-    if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
-
+    // Format: địa chỉ gốc + thông tin chi tiết + loại bất động sản
+    let userPrompt = `Tìm kiếm các bất động sản tại "${location}"`;
+    
+    // Thêm thông tin chi tiết nếu có
+    const detailParts = [];
+    if (street) detailParts.push(`đường ${street}`);
+    if (ward) detailParts.push(`phường ${ward}`);
+    if (district) detailParts.push(`quận ${district}`);
+    if (city) detailParts.push(`${city}`);
+    
+    if (detailParts.length > 0) {
+      userPrompt += ` (${detailParts.join(', ')})`;
+    }
+    
+    if (type) userPrompt += ` loại ${getPropertyTypeDescription(type)}`;
     if (landArea) userPrompt += ` diện tích khoảng ${landArea} m2`;
 
-    userPrompt += `. Tìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
+    userPrompt += `. Tìm kiếm ưu tiên thứ tự: 1) Cùng đường/khu vực, 2) Cùng loại bất động sản (${getPropertyTypeDescription(type)}), 3) Diện tích tương tự (±10%), 4) Các khu vực lân cận tương tự. Trả về đúng định dạng JSON như hướng dẫn.`;
 
     console.log(`🔍 Search prompt prepared (${userPrompt.length} characters)`);
 
@@ -435,18 +458,10 @@ function formatAIResponse(content: string, location: string, parsedAddress?: any
   const providerInfo = provider ? ` (via ${provider === 'proxy' ? 'Proxy Server' : 'Perplexity'})` : '';
 
   return `
-**Dữ liệu search được từ AI${providerInfo} về ${locationContext}:**
+**Dữ liệu search được từ AI về ${locationContext}:**
 
 **Thông tin chính:**
 ${content}
-
-**Thông tin giá trích xuất:**
-${priceInfo}
-
-**Xu hướng thị trường:**
-${trendInfo}
-
-**Tóm tắt:** Thông tin về bất động sản tại ${locationContext} được cập nhật từ các nguồn tin tức và dữ liệu thị trường mới nhất năm ${new Date().getFullYear()}${providerInfo}.
 `.trim();
 }
 
@@ -546,7 +561,7 @@ function getCityProvinceKeywords(parsedAddress?: any): string[] {
 /**
  * Parse JSON from AI response content
  */
-function parseAIResponseJSON(content: string): AIRealEstateData | null {
+function parseAIResponseJSON(content: string): AIRealEstateDataUnion | null {
   try {
     // Try to extract JSON from the content
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -564,31 +579,21 @@ function parseAIResponseJSON(content: string): AIRealEstateData | null {
       return null;
     }
     
-    // If parsed has underscore keys, convert to Vietnamese format
+    // Prioritize new format with underscores
     if (parsed && typeof parsed === 'object' && parsed["cac_tin_rao_ban"]) {
-      const converted: AIRealEstateData = {
-        "giá trung bình": parsed["gia_trung_binh"],
-        "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
-          "tiêu đề": item["tieu_de"],
-          "giá": item["gia"],
-          "diện tích": item["dien_tich"],
-          "địa chỉ": item["dia_chi"],
-          "link": item["link"]
-        }))
-      } as AIRealEstateData;
-      console.log('✅ Parsed AI JSON (underscore format) -> converted:', {
-        avgPrice: converted["giá trung bình"],
-        listings: converted["các tin rao bán"].length
+      console.log('✅ Parsed AI JSON (new underscore format):', {
+        avgPrice: parsed["gia_trung_binh"],
+        listings: parsed["cac_tin_rao_ban"].length
       });
-      return converted;
+      return parsed as AIRealEstateDataNew;
     }
     
-    // Validate the old structure
+    // Fallback to old format with spaces for compatibility
     if (parsed && typeof parsed === 'object' && 
         'giá trung bình' in parsed && 
         'các tin rao bán' in parsed &&
         Array.isArray(parsed['các tin rao bán'])) {
-      console.log('✅ Successfully parsed AI JSON response:', {
+      console.log('✅ Successfully parsed AI JSON response (old format):', {
         avgPrice: parsed['giá trung bình'],
         listings: parsed['các tin rao bán'].length
       });
@@ -646,17 +651,24 @@ export async function searchRealEstateDataEnhanced(location: string, parsedAddre
       return typeMap[type] || type;
     };
 
-    // Format: tên đường + phường + quận + thành phố + loại bất động sản
-    let userPrompt = `Tìm kiếm các bất động sản `;
-    if (street) userPrompt += `${street} `;
-    if (ward) userPrompt += `${ward} `;
-    if (district) userPrompt += `${district} `;
-    if (city) userPrompt += `${city} `;
-    if (type) userPrompt += `${getPropertyTypeDescription(type)}`;
-
+    // Format: địa chỉ gốc + thông tin chi tiết + loại bất động sản
+    let userPrompt = `Tìm kiếm các bất động sản tại "${location}"`;
+    
+    // Thêm thông tin chi tiết nếu có
+    const detailParts = [];
+    if (street) detailParts.push(`đường ${street}`);
+    if (ward) detailParts.push(`phường ${ward}`);
+    if (district) detailParts.push(`quận ${district}`);
+    if (city) detailParts.push(`${city}`);
+    
+    if (detailParts.length > 0) {
+      userPrompt += ` (${detailParts.join(', ')})`;
+    }
+    
+    if (type) userPrompt += ` loại ${getPropertyTypeDescription(type)}`;
     if (landArea) userPrompt += ` diện tích khoảng ${landArea} m2`;
 
-    userPrompt += `. Tìm kiếm ưu tiên thứ tự các tin cùng đường, cùng loại bất động sản (${getPropertyTypeDescription(type)}), diện tích tương tự (±10%). Trả về đúng định dạng JSON như hướng dẫn.`;
+    userPrompt += `. Tìm kiếm ưu tiên thứ tự: 1) Cùng đường/khu vực, 2) Cùng loại bất động sản (${getPropertyTypeDescription(type)}), 3) Diện tích tương tự (±10%), 4) Các khu vực lân cận tương tự. Trả về đúng định dạng JSON như hướng dẫn.`;
 
     console.log(`🔍 Search prompt prepared (${userPrompt.length} characters)`);
 

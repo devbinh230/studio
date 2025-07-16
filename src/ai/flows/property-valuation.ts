@@ -220,13 +220,20 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
     if (obj && typeof obj === 'object') {
       for (const [k, v] of Object.entries(obj)) {
         const key = k.toLowerCase();
-        if (typeof v === 'number' && /giá|price/.test(key) && /(trung bình|average)/.test(key)) {
+        if (typeof v === 'number' && /gia_trung_binh|giá|price/.test(key) && /(trung_binh|trung bình|average)/.test(key)) {
           return v; // already numeric (assumed VND/m2)
         }
         if (typeof v === 'string') {
           const numMatch = v.match(/([\d\.]+)(?=\s*(triệu|ty|tỷ|tr|vnđ|vnd)?)/i);
           if (numMatch) {
-            return parseFloat(numMatch[1]) * (v.includes('triệu') ? 1_000_000 : 1);
+            let price = parseFloat(numMatch[1]);
+            // Kiểm tra đơn vị và chuyển đổi về VND/m2
+            if (v.includes('triệu')) {
+              price = price * 1_000_000;
+            } else if (v.includes('tỷ') || v.includes('ty')) {
+              price = price * 1_000_000_000;
+            }
+            return price;
           }
         }
         if (typeof v === 'object') {
@@ -248,13 +255,12 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
     for (const reg of fenceRegexes) {
       const fenceMatch = searchData.match(reg);
       if (fenceMatch) {
-        // Remove the backticks and optional language tag
         const jsonText = fenceMatch[0].replace(/```json/i, '').replace(/```/g, '').trim();
         try {
           const parsed = JSON.parse(jsonText);
           const avg = findAvgPrice(parsed);
           if (avg && !isNaN(avg)) {
-            return avg; // Already VND/m2 or converted in helper
+            return avg;
           }
         } catch {
           // ignore parse error, continue
@@ -262,31 +268,30 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
       }
     }
 
-    // 2) Try parsing direct JSON object
+    // 2) Try parsing direct JSON object - prioritize new format
     try {
       const parsed = JSON.parse(searchData);
       if (parsed && typeof parsed === 'object') {
-        // Check for new format with underscores
+        // Check for new format with underscores (prioritized)
         if (parsed["gia_trung_binh"]) {
           const avgPrice = typeof parsed["gia_trung_binh"] === 'number' 
             ? parsed["gia_trung_binh"] 
             : parseFloat(parsed["gia_trung_binh"]);
           if (!isNaN(avgPrice)) {
-            return avgPrice; // Assume it's already in VND/m2
+            return avgPrice;
           }
         }
         
-        // Check for old format with spaces
+        // Fallback to old format with spaces
         if (parsed["giá trung bình"]) {
           const avgPrice = typeof parsed["giá trung bình"] === 'number' 
             ? parsed["giá trung bình"] 
             : parseFloat(parsed["giá trung bình"]);
           if (!isNaN(avgPrice)) {
-            return avgPrice; // Assume it's already in VND/m2
+            return avgPrice;
           }
         }
         
-        // Fallback to recursive search
         const avg = findAvgPrice(parsed);
         if (avg && !isNaN(avg)) {
           return avg;
@@ -296,32 +301,7 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
       // Not valid JSON, continue with other methods
     }
 
-    // 3) Fallback – try old brace matching method for both formats
-    try {
-      // Try new format first
-      let jsonMatch = searchData.match(/\{[\s\S]*"gia_trung_binh"[\s\S]*\}/i);
-      if (jsonMatch) {
-        const jsonData = JSON.parse(jsonMatch[0]);
-        const avg = findAvgPrice(jsonData);
-        if (avg && !isNaN(avg)) {
-          return avg;
-        }
-      }
-      
-      // Try old format
-      jsonMatch = searchData.match(/\{[\s\S]*"giá trung bình"[\s\S]*\}/i);
-      if (jsonMatch) {
-        const jsonData = JSON.parse(jsonMatch[0]);
-        const avg = findAvgPrice(jsonData);
-        if (avg && !isNaN(avg)) {
-          return avg;
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // 4) Regex scan for price patterns in plain text
+    // 3) Regex scan for price patterns in plain text
     const searchPricePatterns = [
       /Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*(?:VND|VNĐ)?\/?m²?/i,
       /average price[:\s]*([\d\.]+)\s*vnd\s*\/\s*m2/i,
@@ -337,36 +317,47 @@ function extractMarketPrice(marketData: string, searchData?: string, lotSize?: n
   }
   
   // Fall back to marketData if no price found in searchData
-  const match = marketData.match(/Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*VND\/m²/i);
-  if (match) {
-    return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
+  const patterns = [
+    /Giá trung bình[:\s]*([\d\.]+)\s*triệu\s*VND\/m²/i,
+    /(\d+\.?\d*)\s*triệu\s*VND\/m²/i,
+    /(\d+\.?\d*)\s*triệu/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = marketData.match(pattern);
+    if (match) {
+      return parseFloat(match[1]) * 1_000_000; // Convert to VND/m²
+    }
   }
   
-  return 0;
+  // Fallback: extract any number that looks like a price per m2
+  const fallbackMatch = marketData.match(/(\d+\.?\d*)/);
+  if (fallbackMatch) {
+    const price = parseFloat(fallbackMatch[1]);
+    // If it's a small number, assume it's in millions
+    if (price < 1000) {
+      return price * 1_000_000;
+    }
+    return price;
+  }
+  
+  console.log("Could not extract market price, using fallback");
+  return 50_000_000; // 50 million VND/m² as fallback
 }
 
 // Helper function to extract AI real estate data from searchData
 function extractAIRealEstateData(searchData?: string): any {
   if (!searchData) return null;
 
-  // 1) Try parsing direct JSON object
+  // 1) Try parsing direct JSON object - prioritize new format
   try {
     const parsed = JSON.parse(searchData);
     if (parsed && typeof parsed === 'object') {
-      // Check for new format with underscores
+      // Check for new format with underscores (prioritized - keep original format)
       if (parsed["cac_tin_rao_ban"]) {
-        return {
-          "giá trung bình": parsed["gia_trung_binh"],
-          "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
-            "tiêu đề": item["tieu_de"],
-            "giá": item["gia"],
-            "diện tích": item["dien_tich"],
-            "địa chỉ": item["dia_chi"],
-            "link": item["link"]
-          }))
-        };
+        return parsed; // Return as-is with new format
       }
-      // Check for old format with spaces
+      // Fallback to old format with spaces
       if (parsed["các tin rao bán"]) {
         return parsed;
       }
@@ -388,20 +379,11 @@ function extractAIRealEstateData(searchData?: string): any {
       try {
         const parsed = JSON.parse(jsonText);
         if (parsed && typeof parsed === 'object') {
-          // Check for new format with underscores
+          // Check for new format with underscores (prioritized - keep original format)
           if (parsed["cac_tin_rao_ban"]) {
-            return {
-              "giá trung bình": parsed["gia_trung_binh"],
-              "các tin rao bán": parsed["cac_tin_rao_ban"].map((item: any) => ({
-                "tiêu đề": item["tieu_de"],
-                "giá": item["gia"],
-                "diện tích": item["dien_tich"],
-                "địa chỉ": item["dia_chi"],
-                "link": item["link"]
-              }))
-            };
+            return parsed; // Return as-is with new format
           }
-          // Check for old format with spaces
+          // Fallback to old format with spaces
           if (parsed["các tin rao bán"]) {
             return parsed;
           }
@@ -419,16 +401,7 @@ function extractAIRealEstateData(searchData?: string): any {
     if (jsonMatch) {
       const jsonData = JSON.parse(jsonMatch[0]);
       if (jsonData && typeof jsonData === 'object' && jsonData["cac_tin_rao_ban"]) {
-        return {
-          "giá trung bình": jsonData["gia_trung_binh"],
-          "các tin rao bán": jsonData["cac_tin_rao_ban"].map((item: any) => ({
-            "tiêu đề": item["tieu_de"],
-            "giá": item["gia"],
-            "diện tích": item["dien_tich"],
-            "địa chỉ": item["dia_chi"],
-            "link": item["link"]
-          }))
-        };
+        return jsonData; // Return as-is with new format
       }
     }
     
@@ -447,17 +420,46 @@ function extractAIRealEstateData(searchData?: string): any {
   return null;
 }
 
-// Calculate reasonableValue using price.py logic
-function calculateReasonableValue(input: PropertyValuationRangeInput): number {
+// Generate pricing formula and coefficients as text for AI to understand
+function generatePricingFormula(input: PropertyValuationRangeInput): {
+  formula: string;
+  coefficientsBreakdown: string;
+  baseMarketPrice: number;
+} {
   const baseMarketPrice = extractMarketPrice(input.marketData, input.searchData, input.lotSize);
-  // const baseMarketPrice = baseMarketPrice_mean * 0.97
   const lotSize = input.lotSize || 0;
-  const basePrice = baseMarketPrice * lotSize;
   
   const { laneCoef, legalCoef, widthCoef, cornerCoef, alleyCoef, directionCoef, bookCoef } = calculateCoefficients(input);
   
-  const reasonableValue = basePrice * (1 + laneCoef + legalCoef+ widthCoef + cornerCoef + alleyCoef + directionCoef + bookCoef);
-  return reasonableValue;
+  // Total coefficient
+  const totalCoef = 1 + laneCoef + legalCoef + widthCoef + cornerCoef + alleyCoef + directionCoef + bookCoef;
+  
+  // Create detailed breakdown
+  const coefficientsBreakdown = `
+CÔNG THỨC TÍNH GIÁ: Giá nhà trung bình (${baseMarketPrice.toLocaleString()} VND/m²) × Diện tích đất (${lotSize} m²) × Hệ số tổng (${totalCoef.toFixed(4)})
+
+CHI TIẾT HỆ SỐ:
+- Hệ số cơ bản: 1.0000
+- Hệ số chiều rộng ngõ (${input.laneWidth || 0}m): ${laneCoef >= 0 ? '+' : ''}${laneCoef.toFixed(4)}
+- Hệ số loại ngõ (${input.alleyType || 'không xác định'}): ${alleyCoef >= 0 ? '+' : ''}${alleyCoef.toFixed(4)}
+- Hệ số hướng nhà (${input.houseDirection || 'không xác định'}): ${directionCoef >= 0 ? '+' : ''}${directionCoef.toFixed(4)}
+- Hệ số hình dạng lô (${input.soShape || 'không xác định'}): ${bookCoef >= 0 ? '+' : ''}${bookCoef.toFixed(4)}
+- Hệ số pháp lý (${input.legal || 'không xác định'}): ${legalCoef >= 0 ? '+' : ''}${legalCoef.toFixed(4)}
+- Hệ số chiều rộng mặt tiền (${input.facadeWidth || 0}m): ${widthCoef >= 0 ? '+' : ''}${widthCoef.toFixed(4)}
+- Hệ số số mặt tiền (${input.facadeCount || 1} mặt): ${cornerCoef >= 0 ? '+' : ''}${cornerCoef.toFixed(4)}
+= HỆ SỐ TỔNG: ${totalCoef.toFixed(4)}
+
+KẾT QUÀ TÍNH TOÁN:
+${baseMarketPrice.toLocaleString()} × ${lotSize} × ${totalCoef.toFixed(4)} = ${(baseMarketPrice * lotSize * totalCoef).toLocaleString()} VND
+  `.trim();
+
+  const formula = `Giá nhà trung bình (${baseMarketPrice.toLocaleString()} VND/m²) × Diện tích đất (${lotSize} m²) × Hệ số tổng (${totalCoef.toFixed(4)}) = ${(baseMarketPrice * lotSize * totalCoef).toLocaleString()} VND`;
+
+  return {
+    formula,
+    coefficientsBreakdown,
+    baseMarketPrice
+  };
 }
 
 function getPriceGovPlace(input: PropertyValuationRangeInput): number {
@@ -512,8 +514,8 @@ function getPriceGovPlace(input: PropertyValuationRangeInput): number {
 }
 
 export async function propertyValuationRange(input: PropertyValuationRangeInput): Promise<PropertyValuationRangeOutput> {
-  // Calculate reasonableValue and price_house using price.py logic
-  const reasonableValue = calculateReasonableValue(input);
+  // Generate pricing formula and coefficients breakdown
+  const { formula, coefficientsBreakdown, baseMarketPrice } = generatePricingFormula(input);
   const price_house = calculateConstructionPrice(input);
   
   // Calculate price_gov_place based on VT rules
@@ -527,7 +529,9 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
   // Prepare input for AI with calculated values
   const aiInput: PropertyValuationRangeLLMInput = {
     ...input,
-    reasonableValue,
+    pricingFormula: formula,
+    coefficientsBreakdown,
+    baseMarketPrice,
     price_house,
   };
 
@@ -543,7 +547,9 @@ export async function propertyValuationRange(input: PropertyValuationRangeInput)
 }
 
 const PropertyValuationRangeLLMInputSchema = PropertyValuationRangeInputSchema.extend({
-  reasonableValue: z.number().describe('Giá hợp lý nhất cho bất động sản'),
+  pricingFormula: z.string().describe('Công thức tính giá bất động sản với hệ số'),
+  coefficientsBreakdown: z.string().describe('Chi tiết phân tích các hệ số điều chỉnh giá'),
+  baseMarketPrice: z.number().describe('Giá thị trường cơ bản VND/m²'),
   price_house: z.number().describe('Giá xây dựng'),
 });
 
@@ -580,20 +586,33 @@ Vị trí sau luôn có điều kiện kém hơn vị trí liền trước.
 - Tiện ích xung quanh: {{{amenities}}}
 
 — **DỮ LIỆU THỊ TRƯỜNG**  
+(Giá trung bình là giá trung bình trên 1 m2. Dữ liệu được lấy từ thông tin các khu vực tương tự với bất động sản cần định giá)
 {{{marketData}}} {{{searchData}}}
+
 
 — **GIÁ NHÀ NƯỚC**  
 {{{price_gov}}}
 
-- reasonableValue: {{{reasonableValue}}} VND
-- price_house: {{{price_house}}} VND
+— **CÔNG THỨC TÍNH GIÁ VÀ HỆ SỐ** (Có thể kiểm tra lại các thông số đã phù hợp với bất động sản cần định giá)
+{{{coefficientsBreakdown}}}
 
-— **Áp dụng hệ số điều chỉnh và xác định giá cuối**  
-1. **lowValue**: reasonableValue × 0.90  (giá bán nhanh), tham khảo giá nhà nước từ {{{price_gov}}} làm giá thấp nhất
-2. **reasonableValue**
-3. **highValue**: reasonableValue × 1.1 (giá bán chậm, ưu đãi)  
-4. **price_house**: price_house
+— **CÔNG THỨC CHÍNH**
+{{{pricingFormula}}}
 
+— **YÊU CẦU OUTPUT**  
+Dựa trên công thức tính giá và hệ số trên, hãy xác định:
+
+1. **reasonableValue**: Sử dụng kết quả từ công thức tính giá trên
+2. **lowValue**: reasonableValue × 0.90 (giá bán nhanh - giảm 10%)
+3. **highValue**: reasonableValue × 1.1 (giá bán chậm - tăng 10%)  
+4. **price_house**: Sử dụng đúng giá trị {{{price_house}}} VND
+
+QUAN TRỌNG: 
+- Áp dụng chính xác công thức: Giá thị trường cơ bản ({{{baseMarketPrice}}} VND/m²) × Diện tích × Hệ số tổng
+- lowValue phải nhỏ hơn reasonableValue
+- highValue phải lớn hơn reasonableValue  
+- Tất cả giá trị phải là số nguyên (phải đầy đủ tất cả các số, không được làm tròn)
+- Kiểm tra và điều chỉnh nếu cần thiết dựa trên điều kiện thị trường thực tế
 `,
 });
 
@@ -604,8 +623,8 @@ const propertyValuationRangeFlow = ai.defineFlow(
     outputSchema: PropertyValuationRangeOutputSchema,
   },
   async input => {
-    // Calculate reasonableValue and price_house using price.py logic
-    const reasonableValue = calculateReasonableValue(input);
+    // Generate pricing formula and coefficients breakdown
+    const { formula, coefficientsBreakdown, baseMarketPrice } = generatePricingFormula(input);
     const price_house = calculateConstructionPrice(input);
     const price_gov_place = getPriceGovPlace(input);
 
@@ -615,10 +634,12 @@ const propertyValuationRangeFlow = ai.defineFlow(
     // Prepare input for AI with calculated values
     const aiInput: PropertyValuationRangeLLMInput = {
       ...input,
-      reasonableValue,
+      pricingFormula: formula,
+      coefficientsBreakdown,
+      baseMarketPrice,
       price_house,
     };
-
+    console.log("aiInput: ", aiInput)
     const response = await prompt(aiInput);
     if (!response.output) {
       throw new Error('No output received from AI model');

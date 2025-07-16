@@ -45,7 +45,7 @@ const proxyUrl = process.env.AI_SERVER_PROXY_URL || process.env.PROXY_SERVER_URL
 
 export const ai = genkit({
   plugins,
-  model: 'googleai/gemini-2.5-flash', // Default model
+  model: 'googleai/gemini-2.5-pro', // Default model
 });
 
 

@@ -294,6 +294,11 @@ export async function POST(request: NextRequest) {
     console.log('🔄 Data Source:', hasSharedData ? 'SHARED FROM COMPLETE-FLOW' : 'FETCHED INDEPENDENTLY');
     console.log('='.repeat(60));
 
+    // Add raw JSON logging for debug
+    console.log('📊 AI Input (formatted):', JSON.stringify(sharedInput, null, 2));
+    console.log('🔍 AI Input (raw JSON for debug):', JSON.stringify(sharedInput));
+    console.log('📏 AI Input size:', JSON.stringify(sharedInput).length, 'characters');
+
     // Step 4: Run BOTH AI functions in PARALLEL
     console.log('\n🚀 STEP 4: Running BOTH AI functions in PARALLEL...');
     const step4Start = Date.now();
