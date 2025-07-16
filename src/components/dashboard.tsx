@@ -253,6 +253,7 @@ export default function Dashboard() {
                           {/* Interactive Map */}
                           <div className="rounded-lg overflow-hidden border border-green-200 shadow-lg">
                             <HanoiPlanningMap
+                              key={`planning-map-${lat}-${lng}`} // Force re-render when coordinates change
                               height="600px"
                               showControls={true}
                               className="planning-map-container"
