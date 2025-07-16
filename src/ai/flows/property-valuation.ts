@@ -457,7 +457,6 @@ function calculateReasonableValue(input: PropertyValuationRangeInput): number {
   const { laneCoef, legalCoef, widthCoef, cornerCoef, alleyCoef, directionCoef, bookCoef } = calculateCoefficients(input);
   
   const reasonableValue = basePrice * (1 + laneCoef + legalCoef+ widthCoef + cornerCoef + alleyCoef + directionCoef + bookCoef);
-   
   return reasonableValue;
 }
 
@@ -490,10 +489,13 @@ function getPriceGovPlace(input: PropertyValuationRangeInput): number {
     // VT3: Ngõ 3m - <4.5m
     // VT4: Ngõ <3m
     let vtPrice = 0;
-    if (laneWidth >= 4.5) {
+    if (laneWidth >= 8) {
+      vtPrice = parseNumber(data['VT1']);
+      console.log("Using VT1 price:", data['VT1'], "->", vtPrice);
+    } else if (laneWidth >= 4.5) {
       vtPrice = parseNumber(data['VT2']);
       console.log("Using VT2 price:", data['VT2'], "->", vtPrice);
-    } else if (laneWidth >= 3) {
+    } else if (laneWidth >= 3.5) {
       vtPrice = parseNumber(data['VT3']);
       console.log("Using VT3 price:", data['VT3'], "->", vtPrice);
     } else {
