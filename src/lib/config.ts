@@ -30,7 +30,8 @@ export const config = {
   perplexity: {
     apiKey: process.env.PERPLEXITY_API_KEY,
     baseUrl: process.env.PERPLEXITY_API_URL || "https://api.perplexity.ai/chat/completions",
-    timeout: 10000, // 10 seconds timeout
+    // timeout: 10000, // 10 seconds timeout
+    timeout: 100, // 10 seconds timeout
     model: process.env.PERPLEXITY_MODEL || 'sonar-pro', // Default model for Perplexity
   },
 
@@ -42,7 +43,8 @@ export const config = {
   // AI Models Configuration
   models: {
     proxy: {
-      search: process.env.PROXY_SEARCH_MODEL || 'pplx-claude-4.0-sonnet',
+      // search: process.env.PROXY_SEARCH_MODEL || 'pplx-claude-4.0-sonnet',
+      search: process.env.PROXY_SEARCH_MODEL || 'pplx-sonar',
       fallback: process.env.PROXY_FALLBACK_MODEL || 'o3'
     },
     perplexity: {

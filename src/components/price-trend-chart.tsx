@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from './ui/skeleton';
 import { AlertTriangle, TrendingUp, BarChart3 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 // Default mock data for backward compatibility - không sử dụng làm fallback nữa
 const defaultChartData = [
@@ -57,6 +58,18 @@ interface PriceTrendChartProps {
     date?: string;
   }>;
   className?: string;
+  /**
+   * Giá trị định giá đoạn đường (thấp nhất, trung bình, cao nhất)
+   */
+  roadStats?: {
+    low?: string;
+    avg?: string;
+    high?: string;
+  };
+  /**
+   * Tên đường (dùng để hiển thị tiêu đề "Định giá đường ...")
+   */
+  roadName?: string;
 }
 
 export function PriceTrendChart({ 
@@ -64,7 +77,9 @@ export function PriceTrendChart({
   district = 'thanh_xuan', 
   category = 'nha_mat_pho',
   data,
-  className = ''
+  className = '',
+  roadStats,
+  roadName,
 }: PriceTrendChartProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -159,6 +174,28 @@ export function PriceTrendChart({
     const districtName = districts[district] || district.replace('_', ' ');
     
     return `${districtName}, ${cityName}`;
+  };
+
+  // Helpers to get individual city / district names for composite header
+  const getCityName = (city: string) => {
+    const cities: Record<string, string> = {
+      'ha_noi': 'Hà Nội',
+      'ho_chi_minh': 'TP. HCM',
+      'da_nang': 'Đà Nẵng'
+    };
+    return cities[city] || city.replace('_', ' ');
+  };
+
+  const getDistrictName = (district: string) => {
+    const districts: Record<string, string> = {
+      'thanh_xuan': 'Thanh Xuân',
+      'cau_giay': 'Cầu Giấy',
+      'dong_da': 'Đống Đa',
+      'ba_dinh': 'Ba Đình',
+      'hoan_kiem': 'Hoàn Kiếm',
+      'hai_ba_trung': 'Hai Bà Trưng'
+    };
+    return districts[district] || district.replace('_', ' ');
   };
 
   // Map property type to API category
@@ -374,7 +411,7 @@ export function PriceTrendChart({
         {/* Interactive summary statistics - only show when has real data */}
         {!isLoading && hasRealData && chartData.length > 0 && stats && (
           <div className="mt-4 pt-4 border-t border-slate-200">
-            {/* Header for interactive stats */}
+            {/* Header for interactive stats - road valuation heading update */}
             <div className="text-center mb-3">
               <p className="text-sm font-medium text-slate-700">
                 {hoveredData ? (
@@ -422,6 +459,39 @@ export function PriceTrendChart({
               <div className="text-center mt-3">
                 <p className="text-xs text-slate-400">
                   💡 Di chuyển chuột lên biểu đồ để xem thông tin chi tiết từng tháng
+                </p>
+              </div>
+            )}
+            {roadStats && roadStats.avg && (
+              <>
+                <Separator className="my-4" />
+                <div className="text-center mb-3">
+                  <p className="text-sm font-medium text-slate-700">
+                    {roadName 
+                      ? `Định giá đường ${roadName}, quận ${getDistrictName(district)}, ${getCityName(city)}` 
+                      : `Định giá đường ${getLocationName(city, district)}`}
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <p className="text-xs text-slate-600 mb-1">Thấp nhất</p>
+                    <p className="font-semibold text-emerald-600">{roadStats.low || 'N/A'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-slate-600 mb-1">Cao nhất</p>
+                    <p className="font-semibold text-red-600">{roadStats.high || 'N/A'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-slate-600 mb-1">Trung bình</p>
+                    <p className="font-semibold text-blue-600">{roadStats.avg || 'N/A'}</p>
+                  </div>
+                </div>
+              </>
+            )}
+            {!hoveredData && roadStats && roadStats.avg && (
+              <div className="text-center mt-3">
+                <p className="text-xs text-slate-400">
+                  Dữ liệu thu thập từ internet
                 </p>
               </div>
             )}
