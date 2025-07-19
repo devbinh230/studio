@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, ZoomCont
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getGeoapifyApiKey } from '@/lib/config';
+import { getGeoapifyApiKey, getMapboxAccessToken } from '@/lib/config';
 
 // Interface for planning data
 interface PlanningData {
@@ -109,21 +109,21 @@ function MapAddressSearch({
 
     setIsLoadingSuggestions(true);
     try {
-      const geoapifyApiKey = getGeoapifyApiKey();
+      const mapboxToken = getMapboxAccessToken();
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${geoapifyApiKey}`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&language=vi&types=address,place,locality,district,region&limit=5`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
-          lat: feature.properties.lat,
-          lon: feature.properties.lon,
-          place_id: feature.properties.place_id || Math.random().toString(),
-          address_line1: feature.properties.address_line1,
-          address_line2: feature.properties.address_line2,
-          category: feature.properties.category,
+          formatted: feature.place_name || '',
+          lat: feature.center[1],
+          lon: feature.center[0],
+          place_id: feature.id || Math.random().toString(),
+          address_line1: feature.text,
+          address_line2: feature.context ? feature.context.map((ctx: any) => ctx.text).join(', ') : '',
+          category: feature.place_type ? feature.place_type[0] : '',
         }));
         
         setSuggestions(suggestionsList);

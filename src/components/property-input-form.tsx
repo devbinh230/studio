@@ -57,7 +57,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultAuthToken, getGeoapifyApiKey } from "@/lib/config";
+import { getDefaultAuthToken, getGeoapifyApiKey, getMapboxAccessToken } from "@/lib/config";
 
 const formSchema = z.object({
   address: z.string().min(5, "Vui lòng nhập địa chỉ hợp lệ."),
@@ -565,26 +565,22 @@ export function PropertyInputForm({
 
     setIsLoadingSuggestions(true);
     try {
+      const mapboxToken = getMapboxAccessToken();
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(
-          query
-        )}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
+        `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(query)}&country=vn&types=address,street,district,city&auto_complete=true&access_token=${mapboxToken}&language=vi&limit=5`
       );
       const data = await response.json();
 
-      if (data.features && data.features.length > 0) {
-        const suggestionsList: SearchSuggestion[] = data.features.map(
-          (feature: any) => ({
-            formatted:
-              feature.properties.formatted ||
-              feature.properties.address_line1 ||
-              "",
-            lat: feature.properties.lat,
-            lon: feature.properties.lon,
-            place_id: feature.properties.place_id || Math.random().toString(),
-            address_line1: feature.properties.address_line1,
-            address_line2: feature.properties.address_line2,
-            category: feature.properties.category,
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestionsList: SearchSuggestion[] = data.suggestions.map(
+          (suggestion: any) => ({
+            formatted: suggestion.full_address || suggestion.name || '',
+            lat: suggestion.coordinate?.latitude || 0,
+            lon: suggestion.coordinate?.longitude || 0,
+            place_id: suggestion.mapbox_id || Math.random().toString(),
+            address_line1: suggestion.name || '',
+            address_line2: suggestion.place_formatted || '',
+            category: suggestion.feature_type || 'address',
           })
         );
 

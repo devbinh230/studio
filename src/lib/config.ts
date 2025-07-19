@@ -96,6 +96,15 @@ export const getGeoapifyApiKey = () => {
   return apiKey;
 };
 
+// Helper function to get Mapbox access token (throws error if not set)
+export const getMapboxAccessToken = () => {
+  const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error('NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN is not set in environment variables');
+  }
+  return accessToken;
+};
+
 // Helper function to get Proxy Server config with security masking
 export const getProxyServerConfig = () => {
   const baseUrl = config.proxy.baseUrl;

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { MapPin, Loader2, Navigation, Search, X, Map, Image } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
-import { getGeoapifyApiKey } from '@/lib/config';
+import { getGeoapifyApiKey, getMapboxAccessToken } from '@/lib/config';
 
 // Dynamic import của Leaflet components để tránh SSR issues
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -236,21 +236,21 @@ export function InteractiveMapSimple({
 
     setIsLoadingSuggestions(true);
     try {
-      // Using Geoapify Autocomplete API with Vietnam bias
+      // Using Mapbox Search API v1 for suggestions
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
+        `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(query)}&country=vn&types=address,street,district,city&auto_complete=true&access_token=${getMapboxAccessToken()}&language=vi&limit=8`
       );
       const data = await response.json();
       
-      if (data.features && data.features.length > 0) {
-        const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
-          lat: feature.properties.lat,
-          lon: feature.properties.lon,
-          place_id: feature.properties.place_id || Math.random().toString(),
-          address_line1: feature.properties.address_line1,
-          address_line2: feature.properties.address_line2,
-          category: feature.properties.category,
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestionsList: SearchSuggestion[] = data.suggestions.map((suggestion: any) => ({
+          formatted: suggestion.full_address || suggestion.name || '',
+          lat: suggestion.coordinate?.latitude || 0,
+          lon: suggestion.coordinate?.longitude || 0,
+          place_id: suggestion.mapbox_id || Math.random().toString(),
+          address_line1: suggestion.name || '',
+          address_line2: suggestion.place_formatted || '',
+          category: suggestion.feature_type || 'address',
         }));
         
         setSuggestions(suggestionsList);
@@ -359,20 +359,21 @@ export function InteractiveMapSimple({
     
     setIsLoading(true);
     try {
-      // Using Geoapify Geocoding API
+      const mapboxToken = getMapboxAccessToken();
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchAddress)}&apiKey=${getGeoapifyApiKey()}`
+        `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(searchAddress)}&country=vn&types=address,street,district,city&access_token=${mapboxToken}&language=vi&limit=1`
       );
       const data = await response.json();
       
-      if (data.features && data.features.length > 0) {
-        const feature = data.features[0];
-        const { lat, lon } = feature.properties;
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestion = data.suggestions[0];
+        const lat = suggestion.coordinate?.latitude || 0;
+        const lon = suggestion.coordinate?.longitude || 0;
         
         const locationData: LocationData = {
           latitude: lat,
           longitude: lon,
-          address: feature.properties.formatted || searchAddress,
+          address: suggestion.full_address || suggestion.name || searchAddress,
         };
         
         setSelectedLocation(locationData);
@@ -385,7 +386,7 @@ export function InteractiveMapSimple({
         
         toast({
           title: "Tìm thấy địa chỉ",
-          description: feature.properties.formatted || searchAddress,
+          description: suggestion.full_address || suggestion.name || searchAddress,
         });
       } else {
         toast({
