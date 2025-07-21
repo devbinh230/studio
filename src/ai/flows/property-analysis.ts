@@ -22,17 +22,25 @@ const PropertyAnalysisInputSchema = z.object({
   landArea: z.number().describe('Diện tích đất (m²).'),
   houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
   laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
+  roadWidth: z.string().describe('Loại đường (ngo_ngach, ngo_oto_do_cua, ngo_1_oto, mat_pho, v.v.).').optional(),
+  buildingArea: z.number().describe('Diện tích xây dựng (m²).').optional(),
   facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
   bedrooms: z.number().describe('Số phòng ngủ.').optional(),
   bathrooms: z.number().describe('Số phòng tắm.').optional(),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).'),
   storyNumber: z.number().describe('Số tầng của bất động sản.'),
   legal: z.string().describe('Tình trạng pháp lý (sổ đỏ, hợp đồng, v.v.).'),
+  legalIssues: z.array(z.string()).describe('Các vấn đề pháp lý cụ thể (xay_lan_hang_xom, so_chung_tranh_chap, v.v.).').optional(),
   yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
   searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
   alleyType: z.string().describe('Loại ngõ (thong: ngõ thông, cut: ngõ cụt).').optional(),
   houseDirection: z.string().describe('Hướng nhà (dong, tay, nam, bac).').optional(),
+  soShape: z.string().describe('Hình dáng lô đất (vuong, no_hau, thop_hau, phuc_tap).').optional(),
+  constructionLevel: z.string().describe('Mức độ xây dựng (noi_that_co_ban, noi_that_cao_cap, xay_tho, noi_that_day_du).').optional(),
+  houseQuality: z.string().describe('Chất lượng nhà còn lại (30, 40, 50, 60, 70, 80, 90, 100 phần trăm).').optional(),
+  disadvantages: z.array(z.string()).describe('Danh sách các đặc điểm bất lợi của bất động sản.').optional(),
+  advantages: z.array(z.string()).describe('Danh sách các ưu điểm của bất động sản.').optional(),
 });
 export type PropertyAnalysisInput = z.infer<typeof PropertyAnalysisInputSchema>;
 
@@ -70,6 +78,14 @@ const prompt = ai.definePrompt({
 - Khu vực: {{{ward}}}, {{{district}}}, {{{city}}} (Cấp {{{administrativeLevel}}})
 - Loại ngõ: {{{alleyType}}} (thong: ngõ thông, cut: ngõ cụt)
 - Hướng nhà: {{{houseDirection}}} (dong: Đông, tay: Tây, nam: Nam, bac: Bắc)
+- Hình dáng lô đất: {{{soShape}}} (vuong: vuông, no_hau: nở hậu, thop_hau: thóp hậu, phuc_tap: phức tạp)
+- Loại đường: {{{roadWidth}}}
+- Mức độ xây dựng: {{{constructionLevel}}}
+- Chất lượng nhà còn lại: {{{houseQuality}}}%
+- Vấn đề pháp lý: {{{legalIssues}}}
+- Đặc điểm bất lợi: {{{disadvantages}}}
+- Ưu điểm: {{{advantages}}}
+
 **Dữ liệu thị trường:**
 {{{marketData}}}
 
@@ -84,27 +100,33 @@ Phân tích chi tiết từ marketData (giá trung bình, số giao dịch theo 
    - Sổ hồng (pink_book): 7-8 điểm (pháp lý tốt, có thể chuyển đổi)
    - Hợp đồng (contract): 4-6 điểm (rủi ro pháp lý cao)
    - Sổ trắng (white_book): 2-4 điểm (không được công nhận)
+   - Nếu có legalIssues, giảm điểm tùy mức độ nghiêm trọng
 
 2. **liquidityScore** – Dựa trên marketData (số giao dịch/năm) + đặc điểm vật lý:
    - Phân tích xu hướng giao dịch từ marketData
    - Mặt tiền rộng ({{{facadeWidth}}}m) + đường rộng ({{{laneWidth}}}m) = thanh khoản cao
    - Loại nhà phổ biến (lane_house, apartment) = dễ bán hơn villa, đất trống
+   - Xem xét disadvantages và advantages để đánh giá tính thanh khoản
 
 3. **locationScore** – Phân tích địa danh cụ thể:
    - Tên đường/phố trong {{{address}}} (đường lớn = điểm cao)
    - Phường {{{ward}}} + Quận {{{district}}} + TP {{{city}}} (trung tâm = điểm cao)
    - Cấp hành chính {{{administrativeLevel}}} (0=TW cao nhất, 1=tỉnh thấp hơn)
    - Hướng nhà {{{houseDirection}}} :  Nam, Đông điểm cao do đón gió quanh năm, Tây, Bắc điểm thấp do nắng gắt, nhiệt độ cao
+   - Loại đường {{{roadWidth}}}: mat_pho cao nhất, ngo_ngach thấp nhất
+   - Đánh giá based on disadvantages và advantages về vị trí
 
 4. **evaluationScore** – Dựa trên marketData chi tiết:
    - So sánh giá hiện tại với giá trung bình trong marketData
    - Phân tích biến động giá theo loại BĐS ({{{type}}})
    - Đánh giá độ chính xác định giá dựa trên số lượng giao dịch tham khảo
+   - Xem xét tình trạng nhà: constructionLevel, houseQuality
 
 5. **dividendScore** – Tiềm năng sinh lời từ marketData:
    - Xu hướng tăng/giảm giá từ dữ liệu lịch sử trong marketData
    - Tỷ suất cho thuê theo loại nhà và vị trí cụ thể
    - Tiềm năng tăng giá dựa trên số giao dịch và thanh khoản thị trường
+   - Đánh giá dựa trên advantages và disadvantages
 Trả về object radarScore gồm 5 score và descriptions. Tiếng Việt, ngắn gọn và súc tích.`,
 });
 

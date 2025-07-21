@@ -22,14 +22,17 @@ const PropertyValuationRangeInputSchema = z.object({
   size: z.number().describe('Diện tích sàn (m²).'),
   lotSize: z.number().describe('Diện tích lô đất (m²).'),
   landArea: z.number().describe('Diện tích đất (m²).'),
-  houseArea: z.number().describe('Diện tích sàn xây dựng (m²).'),
+  houseArea: z.number().describe('Diện tích sàn xây dựng (m²).').optional(),
   laneWidth: z.number().describe('Chiều rộng hẻm/đường vào (m).'),
+  roadWidth: z.string().describe('Loại đường (ngo_ngach, ngo_oto_do_cua, ngo_1_oto, mat_pho, v.v.).').optional(),
+  buildingArea: z.number().describe('Diện tích xây dựng (m²).').optional(),
   facadeWidth: z.number().describe('Chiều rộng mặt tiền (m).'),
   facadeCount: z.number().describe('Số lượng mặt tiền (m), ví dụ 1,2,3.').optional(),
   storyNumber: z.number().describe('Số tầng.').optional(),
   bedrooms: z.number().describe('Số phòng ngủ.').optional(),
   bathrooms: z.number().describe('Số phòng tắm.').optional(),
   amenities: z.array(z.string()).describe('Danh sách tiện ích xung quanh (trường học, bệnh viện, trung tâm thương mại, công viên, giao thông công cộng, v.v.).').optional(),
+  legalIssues: z.array(z.string()).describe('Các vấn đề pháp lý cụ thể (xay_lan_hang_xom, so_chung_tranh_chap, v.v.).').optional(),
   yearBuilt: z.number().describe('Năm xây dựng bất động sản.'),
   marketData: z.string().describe('Dữ liệu thị trường hiện tại cho các bất động sản tương đương trong khu vực.'),
   searchData: z.string().describe('Dữ liệu search được từ internet về bất động sản trong khu vực.').optional(),
@@ -38,7 +41,11 @@ const PropertyValuationRangeInputSchema = z.object({
   legal: z.string().describe('Loại hợp đồng (contract, white_book, pink_book, red_book).').optional(),
   alleyType: z.string().describe('Loại ngõ (thong: ngõ thông, cut: ngõ cụt).').optional(),
   houseDirection: z.string().describe('Hướng nhà (dong, tay, nam, bac).').optional(),
-  soShape: z.string().describe('Hình dạng lô đất').optional(),
+  soShape: z.string().describe('Hình dạng lô đất (vuong, no_hau, thop_hau, phuc_tap)').optional(),
+  constructionLevel: z.string().describe('Mức độ xây dựng (noi_that_co_ban, noi_that_cao_cap, xay_tho, noi_that_day_du).').optional(),
+  houseQuality: z.string().describe('Chất lượng nhà còn lại (30, 40, 50, 60, 70, 80, 90, 100 phần trăm).').optional(),
+  disadvantages: z.array(z.string()).describe('Danh sách các đặc điểm bất lợi của bất động sản.').optional(),
+  advantages: z.array(z.string()).describe('Danh sách các ưu điểm của bất động sản.').optional(),
 });
 export type PropertyValuationRangeInput = z.infer<typeof PropertyValuationRangeInputSchema>;
 
@@ -572,6 +579,14 @@ const prompt = ai.definePrompt({
 - Diện tích sàn: {{{size}}} m²  
 - Tiện ích xung quanh: {{{amenities}}}
 - Giá nhà nước (Giá tham chiếu từ Nhà nước): {{{price_gov}}} VND/m²
+- Hình dáng lô đất: {{{soShape}}} (vuong: vuông, no_hau: nở hậu, thop_hau: thóp hậu, phuc_tap: phức tạp)
+- Loại đường: {{{roadWidth}}} 
+- Mức độ xây dựng: {{{constructionLevel}}} (noi_that_co_ban: cơ bản, noi_that_cao_cap: cao cấp, xay_tho: xây thô)
+- Chất lượng nhà còn lại: {{{houseQuality}}}%
+- Vấn đề pháp lý: {{{legalIssues}}}
+- Đặc điểm bất lợi: {{{disadvantages}}}
+- Ưu điểm: {{{advantages}}}
+
 Chú thích về Giá nhà nước:
 VT1: Thửa đất của một chủ sử dụng có ít nhất một mặt giáp đường/phố có tên trong bảng giá ban hành kèm theo Quyết định. Vị trí thuận lợi nhất.
 VT2: Thửa đất có ít nhất một mặt giáp ngõ (ngách/hẻm), với mặt cắt ngõ ≥ 4,5m (tính từ chỉ giới hè đường đến mốc giới đầu tiên của thửa đất).
@@ -599,10 +614,16 @@ Vị trí sau luôn có điều kiện kém hơn vị trí liền trước.
 — **CÔNG THỨC CHÍNH**
 {{{pricingFormula}}}
 
+— **CÁC YẾU TỐ ĐIỀU CHỈNH BỔ SUNG**
+- Xem xét ưu điểm ({{{advantages}}}) để cân nhắc tăng giá thêm 1-5%
+- Xem xét bất lợi ({{{disadvantages}}}) để cân nhắc giảm giá 1-8%
+- Nếu có vấn đề pháp lý ({{{legalIssues}}}), cân nhắc giảm giá thêm 2-10% tùy mức độ nghiêm trọng
+- Xem xét chất lượng nhà ({{{houseQuality}}}) và mức độ hoàn thiện ({{{constructionLevel}}}) để điều chỉnh giá
+
 — **YÊU CẦU OUTPUT**  
 Dựa trên công thức tính giá và hệ số trên, hãy xác định:
 
-1. **reasonableValue**: Sử dụng kết quả từ công thức tính giá trên
+1. **reasonableValue**: Sử dụng kết quả từ công thức tính giá trên, có điều chỉnh theo các yếu tố bổ sung
 2. **lowValue**: reasonableValue × 0.90 (giá bán nhanh - giảm 10%)
 3. **highValue**: reasonableValue × 1.1 (giá bán chậm - tăng 10%)  
 4. **price_house**: Sử dụng đúng giá trị {{{price_house}}} VND
@@ -612,7 +633,7 @@ QUAN TRỌNG:
 - lowValue phải nhỏ hơn reasonableValue
 - highValue phải lớn hơn reasonableValue  
 - Tất cả giá trị phải là số nguyên (phải đầy đủ tất cả các số, không được làm tròn)
-- Kiểm tra và điều chỉnh nếu cần thiết dựa trên điều kiện thị trường thực tế
+- Kiểm tra và điều chỉnh nếu cần thiết dựa trên điều kiện thị trường thực tế và các yếu tố bổ sung đã nêu
 `,
 });
 
