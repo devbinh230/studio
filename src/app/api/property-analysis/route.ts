@@ -2,6 +2,91 @@ import { NextRequest, NextResponse } from 'next/server';
 import { propertyAnalysis } from '@/ai/flows/property-analysis';
 import { searchRealEstateData } from '@/lib/search-utils';
 
+/**
+ * @swagger
+ * /api/property-analysis:
+ *   post:
+ *     summary: Analyze property characteristics and market position
+ *     description: Provides comprehensive property analysis with radar scores across 5 key categories
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - latitude
+ *               - longitude
+ *               - property_details
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 description: Property latitude coordinate
+ *               longitude:
+ *                 type: number
+ *                 description: Property longitude coordinate
+ *               property_details:
+ *                 type: object
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     description: Property type (e.g., nha_trong_hem, nha_pho)
+ *                   landArea:
+ *                     type: number
+ *                     description: Land area in m²
+ *                   houseArea:
+ *                     type: number
+ *                     description: House floor area in m²
+ *                   bedRoom:
+ *                     type: number
+ *                     description: Number of bedrooms
+ *                   bathRoom:
+ *                     type: number
+ *                     description: Number of bathrooms
+ *                   storyNumber:
+ *                     type: number
+ *                     description: Number of stories
+ *                   legal:
+ *                     type: string
+ *                     description: Legal status (e.g., red_book, pink_book)
+ *               auth_token:
+ *                 type: string
+ *                 description: Authentication token
+ *     responses:
+ *       200:
+ *         description: Successful property analysis
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 property_analysis:
+ *                   type: object
+ *                   properties:
+ *                     radarScore:
+ *                       type: object
+ *                       properties:
+ *                         legalityScore:
+ *                           type: number
+ *                         liquidityScore:
+ *                           type: number
+ *                         locationScore:
+ *                           type: number
+ *                         evaluationScore:
+ *                           type: number
+ *                         dividendScore:
+ *                           type: number
+ *                         descriptions:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *       400:
+ *         description: Missing required parameters
+ *       500:
+ *         description: Error processing analysis
+ */
 // Helper function to format market data for AI prompt
 function formatMarketDataForAI(priceTrendData: any): string {
   if (!priceTrendData?.data || !Array.isArray(priceTrendData.data)) {

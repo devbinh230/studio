@@ -61,6 +61,29 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
   `.trim();
 }
           
+/**
+ * @swagger
+ * /api/complete-flow:
+ *   post:
+ *     summary: Complete property valuation flow
+ *     description: Processes property details and returns valuation
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *               longitude:
+ *                 type: number
+ *               property_details:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Successful response
+ */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
