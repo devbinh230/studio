@@ -206,6 +206,8 @@ export const checkAIProviderStatus = () => {
 // Guland Server Configuration
 export const GULAND_CONFIG = {
   SERVER_URL: process.env.NEXT_PUBLIC_GULAND_SERVER_URL || 'http://localhost:8000',
+  // Bearer token for authenticating requests to Guland FastAPI server (server-side only)
+  AUTH_TOKEN: process.env.GULAND_AUTH_TOKEN || '',
   ENDPOINTS: {
     GET_PLANNING_DATA: '/get-planning-data',
     GEOCODING: '/geocoding',

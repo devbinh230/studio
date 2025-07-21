@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GULAND_CONFIG } from '@/lib/config';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Call internal FastAPI map-service endpoint (avoids CORS / HTML response)
-    const apiUrl = `${process.env.NEXT_PUBLIC_GULAND_SERVER_URL || 'http://localhost:8000'}/map-service?lat=${lat}&lng=${lng}`;
+    const apiUrl = `${GULAND_CONFIG.SERVER_URL}/map-service?lat=${lat}&lng=${lng}`;
 
     console.log(`🔗 Fetching map-service data from FastAPI: ${apiUrl}`);
 
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       // Forward the original request headers (except host) if needed
       headers: {
         'Content-Type': 'application/json',
+        ...(GULAND_CONFIG.AUTH_TOKEN ? { 'Authorization': `Bearer ${GULAND_CONFIG.AUTH_TOKEN}` } : {}),
       },
       // `next` option ensures Next.js caches respect (here we disable caching)
       next: { revalidate: 0 },

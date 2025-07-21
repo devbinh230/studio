@@ -57,7 +57,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultAuthToken, getGeoapifyApiKey, getMapboxAccessToken } from "@/lib/config";
+import {
+  getDefaultAuthToken,
+  getGeoapifyApiKey,
+} from "@/lib/config";
 
 const formSchema = z.object({
   address: z.string().min(5, "Vui lòng nhập địa chỉ hợp lệ."),
@@ -565,22 +568,21 @@ export function PropertyInputForm({
 
     setIsLoadingSuggestions(true);
     try {
-      const mapboxToken = getMapboxAccessToken();
       const response = await fetch(
-        `https://api.mapbox.com/search/searchbox/v1/forward?q=${encodeURIComponent(query)}&country=vn&types=address,street,district,city&auto_complete=true&access_token=${mapboxToken}&language=vi&limit=5`
+        `/api/mapbox-search?q=${encodeURIComponent(query)}`
       );
       const data = await response.json();
 
-      if (data.suggestions && data.suggestions.length > 0) {
-        const suggestionsList: SearchSuggestion[] = data.suggestions.map(
-          (suggestion: any) => ({
-            formatted: suggestion.full_address || suggestion.name || '',
-            lat: suggestion.coordinate?.latitude || 0,
-            lon: suggestion.coordinate?.longitude || 0,
-            place_id: suggestion.mapbox_id || Math.random().toString(),
-            address_line1: suggestion.name || '',
-            address_line2: suggestion.place_formatted || '',
-            category: suggestion.feature_type || 'address',
+      if (data.features && data.features.length > 0) {
+        const suggestionsList: SearchSuggestion[] = data.features.map(
+          (feature: any) => ({
+            formatted: feature.properties.place_formatted || feature.properties.name || "",
+            lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
+            lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
+            place_id: feature.properties.mapbox_id || Math.random().toString(),
+            address_line1: feature.properties.name || "",
+            address_line2: feature.properties.place_formatted || "",
+            category: feature.properties.feature_type || "address",
           })
         );
 

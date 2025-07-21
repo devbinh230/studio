@@ -4,7 +4,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, ZoomCont
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { getGeoapifyApiKey, getMapboxAccessToken } from '@/lib/config';
+import { useDebounce } from '@/hooks/use-debounce';
+import { getGeoapifyApiKey } from '@/lib/config';
 
 // Interface for planning data
 interface PlanningData {
@@ -66,13 +67,13 @@ function MapAddressSearch({
   onLocationSelect: (lat: number, lng: number, address: string) => void 
 }) {
   const [searchValue, setSearchValue] = useState('');
+  const debouncedSearchValue = useDebounce(searchValue, 750);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close suggestions when clicking outside and cleanup timeout
   useEffect(() => {
@@ -93,9 +94,6 @@ function MapAddressSearch({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       // Cleanup timeout on unmount
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
     };
   }, []);
 
@@ -109,21 +107,20 @@ function MapAddressSearch({
 
     setIsLoadingSuggestions(true);
     try {
-      const mapboxToken = getMapboxAccessToken();
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=vn&language=vi&types=address,place,locality,district,region&limit=5`
+        `/api/mapbox-search?q=${encodeURIComponent(query)}&limit=5`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.place_name || '',
-          lat: feature.center[1],
-          lon: feature.center[0],
-          place_id: feature.id || Math.random().toString(),
-          address_line1: feature.text,
-          address_line2: feature.context ? feature.context.map((ctx: any) => ctx.text).join(', ') : '',
-          category: feature.place_type ? feature.place_type[0] : '',
+          formatted: feature.properties.place_formatted || feature.properties.name || '',
+          lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
+          lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
+          place_id: feature.properties.mapbox_id || Math.random().toString(),
+          address_line1: feature.properties.name || '',
+          address_line2: feature.properties.place_formatted || '',
+          category: feature.properties.feature_type || 'address',
         }));
         
         setSuggestions(suggestionsList);
@@ -162,16 +159,6 @@ function MapAddressSearch({
     const value = e.target.value;
     setSearchValue(value);
     setSelectedSuggestionIndex(-1);
-    
-    // Clear previous timeout if exists
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    // Set new timeout for debouncing
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchSuggestions(value);
-    }, 300);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -203,6 +190,16 @@ function MapAddressSearch({
         break;
     }
   };
+
+  // Fetch suggestions when debounced value changes
+  useEffect(() => {
+    if (debouncedSearchValue.trim().length > 1) {
+      fetchSuggestions(debouncedSearchValue);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [debouncedSearchValue]);
 
   return (
     <div className="relative w-80 max-w-[calc(100vw-2rem)] sm:max-w-sm">
