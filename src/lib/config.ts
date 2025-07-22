@@ -21,6 +21,10 @@ export const config = {
     authToken: process.env.RESTA_AUTH_TOKEN || process.env.NEXT_PUBLIC_RESTA_AUTH_TOKEN
   },
 
+  goong: {
+    cookie: process.env.GOONG_COOKIE
+  },
+
   // Geoapify API Configuration
   geoapify: {
     apiKey: process.env.GEOAPIFY_API_KEY || process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
@@ -42,7 +46,8 @@ export const config = {
   // AI Models Configuration
   models: {
     proxy: {
-      search: process.env.PROXY_SEARCH_MODEL || 'pplx-claude-4.0-sonnet',
+      // search: process.env.PROXY_SEARCH_MODEL || 'pplx-claude-4.0-sonnet',
+      search: process.env.PROXY_SEARCH_MODEL || 'pplx-sonar',
       fallback: process.env.PROXY_FALLBACK_MODEL || 'o3'
     },
     perplexity: {

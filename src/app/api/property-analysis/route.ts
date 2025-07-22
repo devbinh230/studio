@@ -285,17 +285,23 @@ export async function POST(request: NextRequest) {
     console.log('\n🛣️ STEP 1.5: Reverse geocoding to get street name...');
     let streetName = '';
     try {
-      const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`;
-      const nominatimRes = await fetch(nominatimUrl, { headers: { 'User-Agent': 'studio-bds/1.0' } });
-      if (nominatimRes.ok) {
-        const nominatimData = await nominatimRes.json();
-        streetName = nominatimData.address?.road || nominatimData.address?.pedestrian || nominatimData.address?.footway || '';
-        console.log('🛣️  Street name from Nominatim:', streetName);
+      const geoapifyUrl = `https://api.geoapify.com/v1/geocode/reverse?lat=${latitude}&lon=${longitude}&format=json&apiKey=${process.env.GEOAPIFY_API_KEY}`;
+      const geoapifyRes = await fetch(geoapifyUrl, { headers: { 'User-Agent': 'studio-bds/1.0' } });
+    
+      if (geoapifyRes.ok) {
+        const geoapifyData = await geoapifyRes.json();
+        if (geoapifyData.results && geoapifyData.results.length > 0) {
+          const address = geoapifyData.results[0];
+          streetName = address.street || '';
+          console.log('🛣️  Street name from Geoapify:', streetName);
+        } else {
+          console.log('⚠️  No results from Geoapify');
+        }
       } else {
-        console.log('⚠️  Nominatim reverse geocoding failed');
+        console.log('⚠️  Geoapify reverse geocoding failed');
       }
     } catch (err) {
-      console.log('⚠️  Nominatim error:', err);
+      console.log('⚠️  Geoapify error:', err);
     }
 
     // Step 2.5: Get search data from internet

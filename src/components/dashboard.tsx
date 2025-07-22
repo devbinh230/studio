@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PropertyInputForm } from '@/components/property-input-form';
 import { ValuationDisplay } from '@/components/valuation-display';
 import { ValuationResultDisplay } from '@/components/valuation-result-display';
@@ -45,7 +45,10 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
-  const [showMap, setShowMap] = useState(true); // Show map by default
+  const [showMap, setShowMap] = useState(true);
+
+  const [areaPrices, setAreaPrices] = useState<Record<string, string> | null>(null);
+
   const [planningAnalysisArea, setPlanningAnalysisArea] = useState<{
     north: number;
     south: number;
@@ -61,11 +64,57 @@ export default function Dashboard() {
     notes: string;
   } | null>(null);
 
+
+  useEffect(() => {
+    if (!result) return;
+
+    let lat: number | undefined, lng: number | undefined;
+    const anyResult = result as any;
+
+    if (anyResult.input_data?.coordinates && Array.isArray(anyResult.input_data.coordinates) && anyResult.input_data.coordinates.length === 2) {
+      lat = anyResult.input_data.coordinates[0];
+      lng = anyResult.input_data.coordinates[1];
+    } else if (anyResult.valuation_payload?.geoLocation && Array.isArray(anyResult.valuation_payload.geoLocation) && anyResult.valuation_payload.geoLocation.length === 2) {
+      lng = anyResult.valuation_payload.geoLocation[0];
+      lat = anyResult.valuation_payload.geoLocation[1];
+    } else if (anyResult.valuation_result?.evaluation?.geoLocation && Array.isArray(anyResult.valuation_result.evaluation.geoLocation) && anyResult.valuation_result.evaluation.geoLocation.length === 2) {
+      lng = anyResult.valuation_result.evaluation.geoLocation[0];
+      lat = anyResult.valuation_result.evaluation.geoLocation[1];
+    }
+
+    if (lat && lng) {
+      fetch(`/api/area-prices?lat=${lat}&lng=${lng}`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) {
+            setAreaPrices(json.data);
+          }
+        })
+        .catch(err => console.error('Fetch area prices error:', err));
+    }
+  }, [result]);
+
+  useEffect(() => {
+    if (!result || !selectedLocation) return;
+
+    setIsPlanningAnalysisLoading(true);
+    fetch(`/api/planning-analysis?lat=${selectedLocation.lat}&lng=${selectedLocation.lng}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) {
+          setPlanningAnalysisArea(json.area);
+          setPlanningAnalysisResult(json.result);
+        }
+      })
+      .catch(err => console.error('Fetch planning analysis error:', err))
+      .finally(() => setIsPlanningAnalysisLoading(false));
+  }, [result, selectedLocation]);
+
   const handleValuation = (data: CombinedResult | null) => {
     if (data) {
       setResult(data);
       setError(null);
-      setShowMap(false); // Hide map when results are shown
+      setShowMap(false);
     }
   };
 
@@ -640,6 +689,51 @@ export default function Dashboard() {
                               Dữ liệu được cập nhật từ AI Search • {new Date().toLocaleDateString('vi-VN')}
                             </p>
                           </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
+
+                {/* Area Prices Card - moved from ValuationResultDisplay */}
+                {areaPrices && (() => {
+                  const items = Object.entries(areaPrices as Record<string,string>).filter(([k]) => {
+                    const lower = k.toLowerCase();
+                    // Loại bỏ các mục thống kê tổng quan, chỉ giữ thông tin đường/hẻm
+                    if (k.startsWith('Giá trị định giá')) return false;
+                    if (lower.includes('giá đất')) return false;
+                    if (lower.includes('trung bình') || lower.includes('cao nhất') || lower.includes('thấp nhất')) return false;
+                    if (k === 'Thay đổi') return false;
+                    return true; // Giữ lại các mục đường, hẻm, ngõ...
+                  }) as [string, string][];
+                  if (items.length === 0) return null;
+                  return (
+                    <Card className="professional-card bg-gradient-to-br from-slate-50 to-blue-50 border-slate-200">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl shadow-lg">
+                            <MapPin className="h-6 w-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-slate-800">Giá khu vực xung quanh</h3>
+                            <p className="text-sm text-slate-600 font-normal">Dữ liệu thu thập</p>
+                          </div>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2 max-h-60 overflow-y-auto">
+                          {items.map(([name, price], idx) => (
+                            <div key={idx} className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg hover:border-slate-300 hover:shadow-sm transition-all">
+                              <div className="flex items-center justify-center w-8 h-8 bg-slate-100 rounded-lg">
+                                <MapPin className="h-4 w-4 text-slate-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-700 truncate">{name}</p>
+                                <p className="text-xs text-slate-500 truncate">{price}</p>
+                              </div>
+                              <Badge variant="outline" className="text-xs bg-slate-50 text-slate-600 border-slate-200">#{idx + 1}</Badge>
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
