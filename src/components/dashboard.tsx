@@ -14,6 +14,7 @@ import { RightPanelValuation } from '@/components/right-panel-valuation';
 import { RightPanelRadarChart } from '@/components/right-panel-radar-chart';
 import { UtilitiesInteractiveMap } from '@/components/utilities-interactive-map';
 import dynamic from 'next/dynamic';
+import { preparePlanningAnalysisData } from '@/lib/planning-utils';
 
 const HanoiPlanningMap = dynamic(() => import('@/components/hanoi-planning-map'), {
   ssr: false,
@@ -92,36 +93,32 @@ export default function Dashboard() {
     setIsPlanningAnalysisLoading(true);
 
     try {
-      // In a real implementation, you would:
-      // 1. Capture the map screenshot
-      // 2. Upload it or process it
-      // 3. Call the planning analysis API with the image and location info
+      // Calculate the center of the selected area
+      const centerLat = (bounds.north + bounds.south) / 2;
+      const centerLng = (bounds.east + bounds.west) / 2;
       
-      // For now, simulate an API call with a timeout
-      setTimeout(() => {
-        // Mock result - this would come from the actual API
-        setPlanningAnalysisResult({
-          currentStatus: "Đất ở đô thị - ODT (Hồng)",
-          newPlanning: "Khu dân cư mới QH-2030",
-          affectedArea: "~150m² (~30%)",
-          impactLevel: "🟡 TRUNG BÌNH",
-          notes: "Phần phía Đông bị ảnh hưởng bởi đường quy hoạch mới"
-        });
-        setIsPlanningAnalysisLoading(false);
-      }, 2000);
+      console.log('📊 Planning Analysis Area:', bounds);
+      console.log('📍 Center coordinates:', centerLat, centerLng);
       
-      // In production, you'd call the actual API:
-      /*
+      // Prepare planning data using the center coordinates
+      const planningData = await preparePlanningAnalysisData(centerLat, centerLng);
+      
+      console.log('🗺️ Planning data prepared:', {
+        imageUrl: planningData.imagePath,
+        landInfoLength: planningData.landInfo?.length || 0
+      });
+      
+      // Call the planning analysis API with the prepared data
       const response = await fetch('/api/planning-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          imagePath: '/path/to/captured/image.png',
-          landInfo: `Địa chỉ: ${selectedLocation?.address || ''}
-                    Tọa độ: ${selectedLocation?.latitude}, ${selectedLocation?.longitude}
-                    Vùng phân tích: Bắc (${bounds.north}), Nam (${bounds.south}), Đông (${bounds.east}), Tây (${bounds.west})`
+          imagePath: planningData.imagePath,
+          landInfo: `${planningData.landInfo}
+                  
+                  Vùng phân tích: Bắc (${bounds.north}), Nam (${bounds.south}), Đông (${bounds.east}), Tây (${bounds.west})`,
         }),
       });
       
@@ -130,8 +127,13 @@ export default function Dashboard() {
       }
       
       const data = await response.json();
-      setPlanningAnalysisResult(data);
-      */
+      
+      if (data.success && data.result) {
+        setPlanningAnalysisResult(data.result);
+        console.log('✅ Planning analysis complete:', data.result);
+      } else {
+        throw new Error(data.error || 'Phân tích quy hoạch thất bại');
+      }
       
     } catch (err) {
       console.error('Error during planning analysis:', err);
@@ -208,7 +210,61 @@ export default function Dashboard() {
               <div className="space-y-8">
                 {/* Check if we have API result format or old format */}
                 {'valuation_result' in result ? (
+                  <>
                   <ValuationResultDisplay data={result} />
+
+                    {/* Check if planning analysis results are available in API response */}
+                    {result.planning_analysis?.result && (
+                      <Card className="professional-card bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl shadow-lg">
+                              <Map className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-slate-800">Kết quả phân tích quy hoạch</h3>
+                              <p className="text-sm text-slate-600 font-normal">
+                                Thông tin phân tích tác động quy hoạch đến khu vực
+                              </p>
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-blue-800 mb-2">📊 Kết quả phân tích quy hoạch</h4>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Hiện trạng:</p>
+                                <p className="text-sm font-medium">{result.planning_analysis.result.currentStatus}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Quy hoạch mới:</p>
+                                <p className="text-sm font-medium">{result.planning_analysis.result.newPlanning}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Diện tích ảnh hưởng:</p>
+                                <p className="text-sm font-medium">{result.planning_analysis.result.affectedArea}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Mức độ tác động:</p>
+                                <p className="text-sm font-medium">{result.planning_analysis.result.impactLevel}</p>
+                              </div>
+                            </div>
+                            {result.planning_analysis.result.notes && (
+                              <div className="mt-3 pt-3 border-t border-blue-200">
+                                <div className="flex gap-2 items-start">
+                                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                  <p className="text-sm text-gray-700">{result.planning_analysis.result.notes}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
                 ) : (
                   <>
                     <ValuationDisplay valuation={result.valuation} />
@@ -251,6 +307,58 @@ export default function Dashboard() {
                         />
                       );
                     })()}
+
+                    {/* Check for planning analysis in old format */}
+                    {(result as any).planning_analysis?.result && (
+                      <Card className="professional-card bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-3">
+                            <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl shadow-lg">
+                              <Map className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-slate-800">Kết quả phân tích quy hoạch</h3>
+                              <p className="text-sm text-slate-600 font-normal">
+                                Thông tin phân tích tác động quy hoạch đến khu vực
+                              </p>
+                            </div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-4">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-blue-800 mb-2">📊 Kết quả phân tích quy hoạch</h4>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Hiện trạng:</p>
+                                <p className="text-sm font-medium">{(result as any).planning_analysis.result.currentStatus}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Quy hoạch mới:</p>
+                                <p className="text-sm font-medium">{(result as any).planning_analysis.result.newPlanning}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Diện tích ảnh hưởng:</p>
+                                <p className="text-sm font-medium">{(result as any).planning_analysis.result.affectedArea}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-600 mb-1">Mức độ tác động:</p>
+                                <p className="text-sm font-medium">{(result as any).planning_analysis.result.impactLevel}</p>
+                              </div>
+                            </div>
+                            {(result as any).planning_analysis.result.notes && (
+                              <div className="mt-3 pt-3 border-t border-blue-200">
+                                <div className="flex gap-2 items-start">
+                                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                  <p className="text-sm text-gray-700">{(result as any).planning_analysis.result.notes}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </>
                 )}
 

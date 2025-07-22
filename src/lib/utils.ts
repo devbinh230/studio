@@ -218,3 +218,71 @@ export function extractKeyInsights(aiData: any) {
 
   return insights;
 }
+
+/**
+ * Calculate tile X and Y coordinates from latitude and longitude at a specific zoom level
+ */
+export function latLngToTileXY(lat: number, lng: number, zoom = 20) {
+  const n = 2 ** zoom;
+  const xtile = Math.floor(((lng + 180) / 360) * n);
+  const ytile = Math.floor(
+    (1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2 * n
+  );
+  return { x: xtile, y: ytile };
+}
+
+/**
+ * Generate planning map image URLs from latitude and longitude
+ */
+export function generatePlanningMapUrls(lat: number, lng: number, zoom = 20) {
+  const { x, y } = latLngToTileXY(lat, lng, zoom);
+  
+  // Default planning map URLs without cache parameter
+  return {
+    qh2030: `https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/${zoom}/${x}/${y}.png`,
+    qh500: `https://s3-han02.fptcloud.com/guland/hn-qhxd-2/${zoom}/${x}/${y}.png`,
+    qhPK: `https://s3-hn-2.cloud.cmctelecom.vn/guland4/hanoi-qhpk2/${zoom}/${x}/${y}.png`
+  };
+}
+
+/**
+ * Generate a mosaic of planning map tiles (3x3)
+ */
+export function generatePlanningMapMosaicUrls(lat: number, lng: number, zoom = 20) {
+  const { x, y } = latLngToTileXY(lat, lng, zoom);
+  const delta = [-1, 0, 1];
+  
+  // Create URLs for each template without cache parameter
+  return {
+    qh2030: delta.flatMap(dx => 
+      delta.map(dy => 
+        `https://l5cfglaebpobj.vcdn.cloud/ha-noi-2030-2/${zoom}/${x + dx}/${y + dy}.png`
+      )
+    ),
+    qh500: delta.flatMap(dx => 
+      delta.map(dy => 
+        `https://s3-han02.fptcloud.com/guland/hn-qhxd-2/${zoom}/${x + dx}/${y + dy}.png`
+      )
+    ),
+    qhPK: delta.flatMap(dx => 
+      delta.map(dy => 
+        `https://s3-hn-2.cloud.cmctelecom.vn/guland4/hanoi-qhpk2/${zoom}/${x + dx}/${y + dy}.png`
+      )
+    )
+  };
+}
+
+/**
+ * Extract plain text from HTML string
+ */
+export function extractTextFromHtml(html: string): string {
+  // If in browser environment
+  if (typeof document !== 'undefined') {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    return doc.body.textContent || '';
+  }
+  
+  // Server-side fallback - simple regex to remove HTML tags
+  return html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+}

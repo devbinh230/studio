@@ -61,6 +61,7 @@ import {
   getDefaultAuthToken,
   getGeoapifyApiKey,
 } from "@/lib/config";
+import { preparePlanningAnalysisData } from '@/lib/planning-utils';
 
 const formSchema = z.object({
   address: z.string().min(5, "Vui lòng nhập địa chỉ hợp lệ."),
@@ -475,6 +476,19 @@ type PropertyInputFormProps = {
   onLocationSelect?: (location: LocationData) => void;
 };
 
+// Add code to get planning data
+async function getPlanningData(lat: number, lng: number) {
+  try {
+    console.log('🗺️ Getting planning data for coordinates:', lat, lng);
+    const planningData = await preparePlanningAnalysisData(lat, lng);
+    console.log('✅ Planning data prepared:', planningData);
+    return planningData;
+  } catch (error) {
+    console.error('Error getting planning data:', error);
+    return null;
+  }
+}
+
 export function PropertyInputForm({
   setResult,
   setIsLoading,
@@ -741,29 +755,46 @@ export function PropertyInputForm({
 
     try {
       if (!selectedLocation?.latitude || !selectedLocation?.longitude) {
-        setError("Vui lòng chọn vị trí trên bản đồ trước khi định giá.");
-        setIsLoading(false);
+        toast({
+          title: 'Location Required',
+          description: 'Please select a location on the map',
+          variant: 'destructive',
+        });
         return;
       }
 
       const authToken = getDefaultAuthToken();
+
+      // Get planning data
+      let planningData = null;
+      try {
+        console.log('🗺️ Preparing planning data for analysis...');
+        planningData = await getPlanningData(
+          selectedLocation.latitude,
+          selectedLocation.longitude
+        );
+        console.log('✅ Planning data prepared:', planningData);
+      } catch (planningError) {
+        console.warn('⚠️ Error preparing planning data:', planningError);
+        // Continue without planning data if preparation fails
+      }
 
       const payload = {
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
         property_details: {
           type: values.type,
-          landArea: values.landArea,
-          houseArea: values.houseArea,
-          roadWidth: values.roadWidth,
-          facadeWidth: values.facadeWidth,
-          buildingArea: values.buildingArea,
-          storyNumber: values.storyNumber,
-          bedRoom: values.bedrooms,
-          bathRoom: values.bathrooms,
+          landArea: parseFloat(values.landArea),
+          houseArea: parseFloat(values.houseArea),
+          roadWidth: parseFloat(values.roadWidth),
+          facadeWidth: parseFloat(values.facadeWidth),
+          buildingArea: parseFloat(values.buildingArea),
+          storyNumber: parseInt(values.storyNumber),
+          bedRoom: parseInt(values.bedrooms),
+          bathRoom: parseInt(values.bathrooms),
           legal: values.legal,
           legalIssues: values.legalIssues,
-          yearBuilt: values.yearBuilt,
+          yearBuilt: parseInt(values.yearBuilt),
           alleyType: values.alleyType,
           houseDirection: values.houseDirection,
           soShape: values.soShape,
@@ -772,6 +803,7 @@ export function PropertyInputForm({
           disadvantages: values.disadvantages,
           advantages: values.advantages,
         },
+        planning_data: planningData,
         auth_token: authToken,
       };
 

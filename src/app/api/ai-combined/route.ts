@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { propertyAnalysis } from '@/ai/flows/property-analysis';
 import { propertyValuationRange } from '@/ai/flows/property-valuation';
+import { planningAnalysis } from '@/ai/flows/planning-analysis';
 
 interface PropertyDetails {
   type?: string;
@@ -53,7 +54,13 @@ export async function POST(request: NextRequest) {
   console.log('\n🤖🔥 ================= AI COMBINED API =================');
 
   try {
-    const { latitude, longitude, property_details, _shared_data } = await request.json();
+    const { latitude, longitude, property_details, _shared_data, run_planning_analysis } = await request.json();
+    
+    // Check if we should run planning analysis
+    const shouldRunPlanningAnalysis = !!run_planning_analysis;
+    if (shouldRunPlanningAnalysis) {
+      console.log('🔍 Running Planning Analysis requested');
+    }
 
     // Check if we have shared data to avoid duplicate API calls
     const hasSharedData = _shared_data && _shared_data.skip_data_fetching;
@@ -62,7 +69,7 @@ export async function POST(request: NextRequest) {
       console.log('⚡ USING SHARED DATA - SKIPPING DUPLICATE API CALLS');
       console.log('✅ Received pre-fetched data from complete-flow');
     } else {
-      console.log('⚡ Running BOTH AI functions in PARALLEL');
+      console.log('⚡ Running AI functions in PARALLEL');
     }
 
     if (latitude && longitude) {
@@ -77,6 +84,8 @@ export async function POST(request: NextRequest) {
     let marketData = "Không có dữ liệu thị trường cho khu vực này.";
     let searchData = "Không có dữ liệu search từ internet.";
     let price_gov = '';
+    let planningAnalysisResult = null;
+    let planningImagePaths = [];
 
     if (hasSharedData) {
       // Use shared data from complete-flow (OPTIMIZED PATH)
@@ -193,6 +202,83 @@ export async function POST(request: NextRequest) {
 
     console.log(`⏱️  Step 2 time: ${Date.now() - step2Start}ms`);
     }
+    
+    // Step 2.5: Fetch planning images if planning analysis requested
+    if (shouldRunPlanningAnalysis && latitude && longitude) {
+      console.log('\n🗺️ STEP 2.5: Getting planning images...');
+      const step25Start = Date.now();
+      
+      try {
+        // Call the planning-images API
+        const planningImagesUrl = `${request.nextUrl.origin}/api/test-planning-images`;
+        const planningImagesResponse = await fetch(planningImagesUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat: latitude,
+            lng: longitude,
+            zoom: 18,
+          }),
+        });
+        
+        if (planningImagesResponse.ok) {
+          const imagesData = await planningImagesResponse.json();
+          if (imagesData.success && imagesData.imagePaths && imagesData.imagePaths.length > 0) {
+            planningImagePaths = imagesData.imagePaths;
+            console.log('✅ Planning images fetched:', planningImagePaths.length);
+          } else {
+            console.log('⚠️ Planning images API returned no data');
+          }
+        } else {
+          console.log('⚠️ Planning images API failed');
+        }
+        
+        // Get land info
+        const landInfoUrl = `${request.nextUrl.origin}/api/guland-proxy/planning`;
+        const landInfoResponse = await fetch(landInfoUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            marker_lat: latitude,
+            marker_lng: longitude,
+            province_id: 1, // Assuming Hanoi
+          }),
+        });
+        
+        let landInfo = '';
+        if (landInfoResponse.ok) {
+          const landInfoData = await landInfoResponse.json();
+          if (landInfoData.success && landInfoData.data?.html) {
+            // Extract text from HTML
+            const html = landInfoData.data.html;
+            landInfo = html
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            console.log('✅ Land info fetched:', landInfo.length > 0 ? 'Available' : 'Not available');
+          } else {
+            console.log('⚠️ Land info unavailable');
+          }
+        }
+        
+        // Run planning analysis if we have images and land info
+        if (planningImagePaths.length > 0) {
+          console.log('🧠 Running planning analysis...');
+          planningAnalysisResult = await planningAnalysis({
+            imagePaths: planningImagePaths,
+            landInfo: landInfo || `Địa điểm: ${latitude}, ${longitude}`
+          });
+          console.log('✅ Planning analysis completed');
+        }
+      } catch (planningError) {
+        console.error('❌ Error in planning analysis:', planningError);
+      }
+      
+      console.log(`⏱️ Planning step time: ${Date.now() - step25Start}ms`);
+    }
 
     // Step 3: Prepare shared AI input
     console.log('\n🛠️  STEP 3: Preparing shared AI input...');
@@ -299,15 +385,15 @@ export async function POST(request: NextRequest) {
     console.log('🔍 AI Input (raw JSON for debug):', JSON.stringify(sharedInput));
     console.log('📏 AI Input size:', JSON.stringify(sharedInput).length, 'characters');
 
-    // Step 4: Run BOTH AI functions in PARALLEL
-    console.log('\n🚀 STEP 4: Running BOTH AI functions in PARALLEL...');
+    // Step 4: Run AI functions in PARALLEL
+    console.log('\n🚀 STEP 4: Running AI functions in PARALLEL...');
     const step4Start = Date.now();
 
     console.log('⚡ Starting propertyValuationRange...');
     console.log('⚡ Starting propertyAnalysis...');
-    console.log('⚡ Both functions running concurrently...');
-
-    const [valuationResult, analysisResult] = await Promise.all([
+    
+    // Add planning to parallel execution if requested
+    const tasks = [
       propertyValuationRange(sharedInput).catch(error => {
         console.error('❌ Valuation error:', error);
         return { error: `Valuation failed: ${error.message}` };
@@ -316,12 +402,19 @@ export async function POST(request: NextRequest) {
         console.error('❌ Analysis error:', error);
         return { error: `Analysis failed: ${error.message}` };
       })
-    ]);
+    ];
+    
+    // Run all tasks in parallel
+    const results = await Promise.all(tasks);
+    const [valuationResult, analysisResult] = results;
 
     const step4Time = Date.now() - step4Start;
-    console.log(`⚡ BOTH AI functions completed in ${step4Time}ms`);
+    console.log(`⚡ AI functions completed in ${step4Time}ms`);
     console.log('✅ Property Valuation:', 'error' in valuationResult ? 'Failed' : 'Success');
     console.log('✅ Property Analysis:', 'error' in analysisResult ? 'Failed' : 'Success');
+    if (planningAnalysisResult) {
+      console.log('✅ Planning Analysis:', planningAnalysisResult ? 'Success' : 'Failed');
+    }
 
     // DEBUG: Log detailed AI results
     console.log('🔍 DEBUG: AI Results Analysis');
@@ -356,6 +449,7 @@ export async function POST(request: NextRequest) {
       results: {
         valuation: 'error' in valuationResult ? null : valuationResult,
         analysis: 'error' in analysisResult ? null : analysisResult,
+        planning: planningAnalysisResult
       },
       input_data: {
         coordinates: latitude && longitude ? [latitude, longitude] : null,
@@ -363,6 +457,7 @@ export async function POST(request: NextRequest) {
         parsed_address: parsedAddress,
         shared_input: sharedInput,
         used_shared_data: hasSharedData, // Track optimization usage
+        planning_images: planningImagePaths
       },
       performance: {
         total_time: totalTime,

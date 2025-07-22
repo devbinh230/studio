@@ -1,8 +1,10 @@
 import { type propertyValuationRange } from '@/ai/flows/property-valuation';
 import { type propertyAnalysis } from '@/ai/flows/property-analysis';
+import { type planningAnalysis } from '@/ai/flows/planning-analysis';
 
 export type ValuationResult = Awaited<ReturnType<typeof propertyValuationRange>>;
 export type SummaryResult = Awaited<ReturnType<typeof propertyAnalysis>>;
+export type PlanningAnalysisResult = Awaited<ReturnType<typeof planningAnalysis>>;
 
 export type PropertyInputSchema = {
   address: string;
@@ -136,6 +138,12 @@ export type ApiValuationResult = {
         descriptions: string[];
       };
     };
+    error?: string;
+  };
+  planning_analysis?: {
+    success: boolean;
+    data: PlanningAnalysisResult;
+    result: PlanningAnalysisResult;
     error?: string;
   };
   utilities?: {

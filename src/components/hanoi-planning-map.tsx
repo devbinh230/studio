@@ -1,11 +1,29 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, ZoomControl, Rectangle } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+// Import React hooks first
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { getGeoapifyApiKey } from '@/lib/config';
+import { latLngToTileXY, generatePlanningMapUrls, generatePlanningMapMosaicUrls } from '@/lib/utils';
+
+// Import Leaflet only on client-side
+let L: any;
+let leafletImage: any;
+let MapContainer: any, TileLayer: any, Marker: any, Popup: any, useMapEvents: any, Polygon: any, ZoomControl: any, Rectangle: any;
+
+// Import html-to-image only on client side
+let toPng: any;
+
+// Interface for search suggestions
+interface SearchSuggestion {
+  formatted: string;
+  lat: number;
+  lon: number;
+  place_id: string;
+  address_line1?: string;
+  address_line2?: string;
+  category?: string;
+}
 
 // Interface for planning data
 interface PlanningData {
@@ -49,15 +67,40 @@ interface PlanningData {
   };
 }
 
-// Interface for search suggestions
-interface SearchSuggestion {
-  formatted: string;
-  lat: number;
-  lon: number;
-  place_id: string;
-  address_line1?: string;
-  address_line2?: string;
-  category?: string;
+// Initialize Leaflet on client side only
+if (typeof window !== 'undefined') {
+  // Dynamic imports for client-side only
+  L = require('leaflet');
+  leafletImage = require('leaflet-image');
+  const reactLeaflet = require('react-leaflet');
+  MapContainer = reactLeaflet.MapContainer;
+  TileLayer = reactLeaflet.TileLayer;
+  Marker = reactLeaflet.Marker;
+  Popup = reactLeaflet.Popup;
+  useMapEvents = reactLeaflet.useMapEvents;
+  Polygon = reactLeaflet.Polygon;
+  ZoomControl = reactLeaflet.ZoomControl;
+  Rectangle = reactLeaflet.Rectangle;
+  
+  // Import html-to-image
+  const htmlToImage = require('html-to-image');
+  toPng = htmlToImage.toPng;
+  
+  // Fix for default markers in react-leaflet
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  });
+  
+  // Khắc phục vấn đề cache bằng cách ghi đè phương thức TileLayer.getTileUrl
+  const originalGetTileUrl = L.TileLayer.prototype.getTileUrl;
+  L.TileLayer.prototype.getTileUrl = function(coords: any) {
+    const url = originalGetTileUrl.call(this, coords);
+    // Sử dụng proxy để tránh CORS error
+    return `/api/map-tile-proxy?url=${encodeURIComponent(url.split('?')[0])}`;
+  };
 }
 
 // Component for embedded address search
@@ -311,10 +354,10 @@ function MapClickHandler({
   onMapReady?: (map: any) => void;
 }) {
   const map = useMapEvents({
-    click: (e) => {
+    click: (e: { latlng: { lat: number; lng: number } }) => {
       onMapClick(e.latlng.lat, e.latlng.lng);
     },
-    zoomend: (e) => {
+    zoomend: (e: { target: { getZoom: () => number } }) => {
       if (onZoomChange) {
         onZoomChange(e.target.getZoom());
       }
@@ -644,7 +687,7 @@ function PlanningOverlayManager({
       `;
 
       // Add click handler to overlay element
-      overlayElement.addEventListener('click', (e) => {
+      overlayElement.addEventListener('click', (e: Event) => {
         e.stopPropagation();
         onAreaClick(area);
       });
@@ -1394,6 +1437,24 @@ interface HanoiPlanningMapProps {
     east: number;
     west: number;
   }) => void; // Callback khi người dùng chọn vùng để phân tích
+  mapFunctionsRef?: React.MutableRefObject<{
+    capturePlanningMapImages?: (
+      lat: number,
+      lng: number,
+      options?: {
+        zoom?: number;
+        useMosaic?: boolean;
+        includeBaseMap?: boolean;
+        captureLeaflet?: boolean;
+        boundingBox?: {
+          north: number;
+          south: number;
+          east: number;
+          west: number;
+        };
+      }
+    ) => Promise<any>;
+  } | null>;
 }
 
 /**
@@ -1476,7 +1537,7 @@ function BoundingBoxDrawer({
   }, [enabled]);
 
   const map = useMapEvents({
-    mousedown: (e) => {
+    mousedown: (e: { latlng: { lat: number; lng: number } }) => {
       if (!enabled) return;
       
       // Start drawing
@@ -1486,14 +1547,14 @@ function BoundingBoxDrawer({
       setIsDrawing(true);
       setDrawnBounds(null);
     },
-    mousemove: (e) => {
+    mousemove: (e: { latlng: { lat: number; lng: number } }) => {
       if (!enabled || !isDrawing || !startPoint) return;
       
       // Update current point while dragging
       const { lat, lng } = e.latlng;
       setCurrentPoint([lat, lng]);
     },
-    mouseup: (e) => {
+    mouseup: (e: { latlng: { lat: number; lng: number } }) => {
       if (!enabled || !isDrawing || !startPoint || !currentPoint) return;
       
       // Complete drawing
@@ -1539,38 +1600,8 @@ function BoundingBoxDrawer({
     ] as [[number, number], [number, number]];
   }, [startPoint, currentPoint]);
 
-  if (!enabled) return null;
-
-  return (
-    <>
-      {/* Show the rectangle being drawn */}
-      {isDrawing && currentBounds && (
-        <Rectangle
-          bounds={currentBounds}
-          pathOptions={{ 
-            color: '#2196f3', 
-            weight: 2, 
-            fillColor: '#2196f3', 
-            fillOpacity: 0.2,
-            dashArray: '5, 5' 
-          }}
-        />
-      )}
-      
-      {/* Show the completed rectangle */}
-      {!isDrawing && drawnBounds && (
-        <Rectangle
-          bounds={drawnBounds}
-          pathOptions={{ 
-            color: '#0d47a1', 
-            weight: 3, 
-            fillColor: '#2196f3', 
-            fillOpacity: 0.3 
-          }}
-        />
-      )}
-    </>
-  );
+  // Return null to not render any visible rectangles
+  return null;
 }
 
 export default function HanoiPlanningMap({ 
@@ -1583,7 +1614,8 @@ export default function HanoiPlanningMap({
   initialZoom,
   autoClickOnLoad = false,
   showHanoiLandLayer,
-  onAnalysisArea
+  onAnalysisArea,
+  mapFunctionsRef
 }: HanoiPlanningMapProps) {
   const [isClient, setIsClient] = useState(false);
   const [geoapifyApiKey, setGeoapifyApiKey] = useState<string | null>(null);
@@ -1619,6 +1651,213 @@ export default function HanoiPlanningMap({
     west: number;
   } | null>(null);
 
+  // Load Leaflet CSS dynamically on client-side
+  useEffect(() => {
+    setIsClient(true);
+    
+    // Dynamically load Leaflet CSS
+    if (typeof document !== 'undefined') {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+      
+      return () => {
+        document.head.removeChild(link);
+      };
+    }
+  }, []);
+
+  // Capture planning map images function - defined inside the component
+  const capturePlanningMapImages = useCallback(async (
+    lat: number, 
+    lng: number, 
+    options: {
+      zoom?: number;
+      useMosaic?: boolean;
+      includeBaseMap?: boolean;
+      captureLeaflet?: boolean;
+      boundingBox?: {
+        north: number;
+        south: number;
+        east: number;
+        west: number;
+      };
+    } = {}
+  ) => {
+    if (!mapInstance) {
+      console.error('Map instance not available');
+      return null;
+    }
+    
+    const safeZoom = options.zoom || 18;
+    const useMosaic = options.useMosaic ?? true;
+    const includeBaseMap = options.includeBaseMap ?? true;
+    const boundingBox = options.boundingBox;
+    
+    try {
+      console.log(`📷 Capturing map at coordinates ${lat}, ${lng} with zoom ${safeZoom}`);
+      
+      // Remember current map state to restore later
+      const originalCenter = mapInstance.getCenter();
+      const originalZoom = mapInstance.getZoom();
+      const originalBaseMapOpacity = baseMapOpacity;
+      const originalLayer1Opacity = layer1Opacity;
+      
+      // Use a temporary marker or bounding box
+      let tempMarker: any = null;
+      let rectangle: any = null;
+
+      // Handle bounding box if provided, otherwise use point
+      if (boundingBox) {
+        // Use the provided bounding box
+        const bounds = [
+          [boundingBox.south, boundingBox.west],
+          [boundingBox.north, boundingBox.east]
+        ] as [[number, number], [number, number]];
+
+        // Fit map to these bounds
+        mapInstance.fitBounds(bounds);
+        
+        // We're not adding any visible rectangle
+        // Just store the bounds for calculations
+        
+        // Calculate center for metadata
+        lat = (boundingBox.north + boundingBox.south) / 2;
+        lng = (boundingBox.east + boundingBox.west) / 2;
+      } else {
+        // Single point mode
+        mapInstance.setView([lat, lng], safeZoom);
+        
+        // Don't add any marker or rectangle - keep the map clean
+      }
+      
+      // Prepare for the screenshot
+      if (!includeBaseMap) {
+        // Set base layer opacity to 0 temporarily
+        setBaseMapOpacity(0);
+      }
+      
+      // Adjust layer opacity to ensure it's visible
+      setLayer1Opacity(1.0);
+      
+      // Wait for layers to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      let result: any = null;
+      
+      // Use leaflet-image to capture if requested
+      if (options.captureLeaflet && typeof window !== 'undefined' && leafletImage) {
+        console.log('📸 Using leaflet-image for capture...');
+        
+        try {
+          const imageDataUrl = await new Promise<string>((resolve, reject) => {
+            leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
+              if (err) {
+                console.error('leaflet-image error:', err);
+                reject(err);
+                return;
+              }
+              
+              try {
+                const dataUrl = canvas.toDataURL('image/png');
+                resolve(dataUrl);
+              } catch (canvasErr) {
+                console.error('Canvas conversion error:', canvasErr);
+                reject(canvasErr);
+              }
+            });
+          });
+          
+          result = { 
+            imageDataUrl,
+            lat, 
+            lng
+          };
+          
+          console.log('📸 Leaflet image captured:', { width: 'N/A', height: 'N/A' });
+        } catch (leafletErr) {
+          console.error('📸 Leaflet image capture failed:', leafletErr);
+          // Will fall back to other methods
+        }
+      }
+      
+      // If leaflet-image failed or wasn't requested, use html-to-image
+      if (!result && typeof window !== 'undefined' && toPng) {
+        try {
+          console.log('📸 Using html-to-image for capture...');
+          
+          // Find the map container
+          const mapContainer = document.querySelector('.map-container');
+          if (mapContainer) {
+            const imageDataUrl = await toPng(mapContainer as HTMLElement);
+            
+            result = {
+              imageDataUrl,
+              lat,
+              lng
+            };
+            
+            console.log('📸 HTML capture completed');
+          } else {
+            console.error('Map container not found');
+          }
+        } catch (htmlToImageErr) {
+          console.error('📸 HTML-to-image capture failed:', htmlToImageErr);
+        }
+      }
+      
+      // If all capture methods failed or are unavailable, get tile URLs
+      if (!result) {
+        console.log('📸 Capture failed or unavailable. Returning tile URLs...');
+        
+        if (useMosaic) {
+          const urls = generatePlanningMapMosaicUrls(lat, lng, safeZoom);
+          result = { ...urls, lat, lng };
+        } else {
+          const urls = generatePlanningMapUrls(lat, lng, safeZoom);
+          result = { ...urls, lat, lng };
+        }
+      }
+      
+      // Clean up and restore original settings
+      if (tempMarker) {
+        mapInstance.removeLayer(tempMarker);
+      }
+      if (rectangle) {
+        mapInstance.removeLayer(rectangle);
+      }
+      
+      // Restore original map state
+      mapInstance.setView([originalCenter.lat, originalCenter.lng], originalZoom);
+      setBaseMapOpacity(originalBaseMapOpacity);
+      setLayer1Opacity(originalLayer1Opacity);
+      
+      return result;
+    } catch (error) {
+      console.error('Error capturing map:', error);
+      return null;
+    }
+  }, [mapInstance, baseMapOpacity, layer1Opacity, setBaseMapOpacity, setLayer1Opacity]);
+
+  // Update mapFunctionsRef with capture function
+  useEffect(() => {
+    if (mapFunctionsRef) {
+      mapFunctionsRef.current = {
+        ...mapFunctionsRef?.current,
+        capturePlanningMapImages
+      };
+    }
+    
+    // Also update global mapFunctions for use in planning-utils.ts
+    if (typeof window !== 'undefined') {
+      (window as any).mapFunctions = {
+        capturePlanningMapImages
+      };
+      console.log('✅ Map functions registered globally');
+    }
+  }, [capturePlanningMapImages, mapFunctionsRef]);
+
   // Handler for bounding box completion
   const handleBoundingBoxComplete = (bounds: {
     north: number;
@@ -1643,25 +1882,55 @@ export default function HanoiPlanningMap({
     if (!mapInstance || !analysisAreaBounds) return;
     
     try {
-      // Convert the map to a visible HTML element that can be captured
-      const mapContainer = mapInstance.getContainer();
-      
-      // Use html-to-image or similar library to capture the map
-      // This is just a placeholder - actual implementation will depend on libraries available
-      console.log('Capturing screenshot of area:', analysisAreaBounds);
-      
-      // You would typically:
-      // 1. Zoom/pan the map to fit the bounds
-      // 2. Capture the visible area
-      // 3. Save or process the image
-      
-      // For now we'll just log that it would happen
-      console.log('Screenshot would be captured here');
-      
-      return '/path/to/captured/image.png'; // Placeholder return
+      setIsLoading(true);
+      // Use the enhanced capturePlanningMapImages function with boundingBox option
+      const result = await capturePlanningMapImages(0, 0, {
+        zoom: currentZoom,
+        useMosaic: false, 
+        includeBaseMap: true,
+        captureLeaflet: true,
+        boundingBox: analysisAreaBounds
+      });
+
+      if (result && result.imageDataUrl) {
+        // You can use the result.imageDataUrl here
+        // For example, open in a new window or save it
+        console.log('✅ Area screenshot captured successfully');
+        
+        // Create a simple preview window
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(`
+            <html>
+              <head><title>Planning Map Screenshot</title></head>
+              <body style="margin:0;padding:20px;text-align:center;background:#f8f9fa;">
+                <h3>Planning Map Screenshot</h3>
+                <div>
+                  <img src="${result.imageDataUrl}" 
+                       style="max-width:100%;border:1px solid #ddd;box-shadow:0 2px 10px rgba(0,0,0,0.1);" />
+                </div>
+                <p style="margin-top:15px;">
+                  <a href="${result.imageDataUrl}" download="planning-map-${Date.now()}.png" 
+                     style="padding:10px 15px;background:#4285f4;color:white;text-decoration:none;border-radius:4px;">
+                     Download Image
+                  </a>
+                </p>
+              </body>
+            </html>
+          `);
+          win.document.close();
+        }
+        
+        return result.imageDataUrl;
+      } else {
+        console.error('No image data URL in result');
+        return null;
+      }
     } catch (error) {
       console.error('Error capturing screenshot:', error);
       return null;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1865,6 +2134,28 @@ export default function HanoiPlanningMap({
       return () => clearTimeout(timer);
     }
   }, [isClient, autoClickOnLoad, initialLat, initialLng, mapInstance, selectedLocation]);
+  
+  // Update mapFunctionsRef with capture function
+  useEffect(() => {
+    if (mapInstance) {
+      // Update both the ref and the global window.mapFunctions
+      const mapFunctions = {
+        capturePlanningMapImages: (lat: number, lng: number, options = {}) => 
+          capturePlanningMapImages(lat, lng, options)
+      };
+      
+      // Update the ref if provided
+      if (mapFunctionsRef) {
+        mapFunctionsRef.current = mapFunctions;
+      }
+      
+      // Always update the global variable for use in planning-utils.ts
+      if (typeof window !== 'undefined') {
+        (window as any).mapFunctions = mapFunctions;
+        console.log('✅ Map functions registered globally');
+      }
+    }
+  }, [mapInstance, mapFunctionsRef]);
 
   // Fetch geocoding data once when component mounts
   useEffect(() => {
@@ -2290,6 +2581,8 @@ export default function HanoiPlanningMap({
     }, 100);
   };
 
+  // Function removed - now defined with useCallback inside component
+
   // Add effect to handle map type button clicks
   useEffect(() => {
     if (!isClient) return;
@@ -2691,6 +2984,7 @@ export default function HanoiPlanningMap({
           touchZoom={true}
           boxZoom={true}
           keyboard={true}
+          preferCanvas={true}
         >
           <MapClickHandler 
             onMapClick={handleMapClick} 
@@ -2728,6 +3022,7 @@ export default function HanoiPlanningMap({
               minZoom={8}
               opacity={baseMapOpacity}
               zIndex={1}
+              // crossOrigin="anonymous"
             />
           )}
           
@@ -2740,6 +3035,7 @@ export default function HanoiPlanningMap({
               minZoom={8}
               opacity={baseMapOpacity}
               zIndex={1}
+              // crossOrigin="anonymous"
             />
           )}
           
@@ -2752,6 +3048,7 @@ export default function HanoiPlanningMap({
               minZoom={8}
               opacity={baseMapOpacity}
               zIndex={1}
+              // crossOrigin="anonymous"
             />
           )}
           
@@ -2766,6 +3063,7 @@ export default function HanoiPlanningMap({
             minZoom={8}
             opacity={layer1Opacity}
             zIndex={10}
+            // crossOrigin="anonymous"
             errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
             />
           )}
@@ -2780,6 +3078,7 @@ export default function HanoiPlanningMap({
             minZoom={8}
             opacity={layer2Opacity}
             zIndex={20}
+            // crossOrigin="anonymous"
             errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
             />
           )}

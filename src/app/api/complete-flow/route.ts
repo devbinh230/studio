@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
         total_time: number;
         step_times: Record<string, number>;
       };
+      planning_analysis?: any; // Thêm trường cho phân tích kế hoạch
     } = {
       input_coordinates: [latitude, longitude],
       location_info: null,
@@ -143,12 +144,14 @@ export async function POST(request: NextRequest) {
       distance_analysis: null,
       ai_real_estate_data: null, // Initialize AI real estate data
       search_sources: [], // Initialize search sources
+      price_gov_data: null, // Initialize price_gov_data
       success: false,
       error: null,
       performance: {
         total_time: 0,
         step_times: {}
-      }
+      },
+      planning_analysis: undefined // Initialize planning_analysis
     };
 
     const startTime = Date.now();
@@ -705,6 +708,15 @@ export async function POST(request: NextRequest) {
       console.log('🔍 Search Data Length:', sharedSearchData ? (sharedSearchData.length || 0) : 0);
       console.log('🔍 Search Data Preview:', sharedSearchData ? sharedSearchData.substring(0, 200) + '...' : 'NO SEARCH DATA');
       console.log('💰 Price Gov:', sharedAIInput.price_gov);
+
+      // Check for planning data
+      const planning_data = body.planning_data;
+      if (planning_data) {
+        console.log('🗺️ Planning Data:', {
+          imagePath: planning_data.imagePath,
+          landInfoLength: planning_data.landInfo?.length || 0
+        });
+      }
       console.log('='.repeat(50));
 
       const aiCombinedResponse = await fetch(`${request.nextUrl.origin}/api/ai-combined`, {
@@ -719,6 +731,8 @@ export async function POST(request: NextRequest) {
           longitude,
           property_details: mergedDetails,
           auth_token,
+          // Pass planning data if available
+          planning_data: planning_data,
           // CRITICAL: Pass shared data to prevent duplicate calls
           _shared_data: {
             parsedAddress,
@@ -739,6 +753,7 @@ export async function POST(request: NextRequest) {
         console.log('🔍 Results Object:', aiCombinedData.results);
         console.log('🔍 Valuation Data:', aiCombinedData.results?.valuation);
         console.log('🔍 Analysis Data:', aiCombinedData.results?.analysis);
+        console.log('🔍 Planning Data:', aiCombinedData.results?.planning);
         
         // Check if we have valid data
         if (aiCombinedData.success && aiCombinedData.results) {
@@ -758,6 +773,16 @@ export async function POST(request: NextRequest) {
               radarScore: aiCombinedData.results.analysis?.radarScore // Extract radarScore specifically
             }
           };
+
+          // Add planning results if available
+          if (aiCombinedData.results.planning) {
+            result.planning_analysis = {
+              success: true,
+              data: aiCombinedData.results.planning,
+              result: aiCombinedData.results.planning
+            };
+            console.log('✅ Planning Analysis integrated successfully');
+          }
           
           // Additional validation
           if (!aiCombinedData.results.valuation) {
@@ -772,6 +797,19 @@ export async function POST(request: NextRequest) {
             console.log('🔍 Analysis Error:', aiCombinedData.errors?.analysis_error);
             result.ai_analysis.success = false;
             result.ai_analysis.error = aiCombinedData.errors?.analysis_error || 'Analysis failed';
+          }
+
+          if (planning_data && !aiCombinedData.results.planning) {
+            console.log('⚠️  Planning Analysis is null, checking errors...');
+            console.log('🔍 Planning Error:', aiCombinedData.errors?.planning_error);
+            if (!result.planning_analysis) {
+              result.planning_analysis = {
+                success: false,
+                error: aiCombinedData.errors?.planning_error || 'Planning analysis failed',
+                data: null,
+                result: null
+              };
+            }
           }
         } else {
           console.log('❌ AI Combined response indicates failure');
@@ -791,6 +829,15 @@ export async function POST(request: NextRequest) {
             data: null,
             result: { radarScore: null }
           };
+
+          if (planning_data && !aiCombinedData.results?.planning) {
+            result.planning_analysis = {
+              success: false,
+              error: aiCombinedData.errors?.planning_error || 'Planning analysis failed',
+              data: null,
+              result: null
+            };
+          }
         }
       } else {
         const errorText = await aiCombinedResponse.text();

@@ -1,56 +1,50 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { GULAND_CONFIG } from '@/lib/config';
+import { NextResponse } from 'next/server';
+import axios from 'axios';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const layerId = searchParams.get('layerId');
+  
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const response = await axios.get(`https://guland.vn/api/planning/map/detail-layer?id=${layerId}`);
+    return NextResponse.json(response.data);
+  } catch (error) {
+    console.error('Error fetching detail layer:', error);
+    return NextResponse.json({ success: false, message: 'Failed to fetch detail layer' }, { status: 500 });
+  }
+}
 
-    if (!id) {
-      return NextResponse.json(
-        { success: false, message: 'Missing id parameter' },
-        { status: 400 }
-      );
+// Add the tile proxy function
+export async function POST(request: Request) {
+  try {
+    const { tileUrl } = await request.json();
+    
+    if (!tileUrl) {
+      return NextResponse.json({ success: false, message: 'No tile URL provided' }, { status: 400 });
     }
 
-    // Call FastAPI detail-layer endpoint
-    const apiUrl = `${GULAND_CONFIG.SERVER_URL}/map-service/detail-layer?id=${id}`;
-
-    console.log('🔗 Fetching detail-layer from FastAPI:', apiUrl);
-
-    const apiRes = await fetch(apiUrl, {
+    const response = await axios.get(tileUrl, {
+      responseType: 'arraybuffer',
       headers: {
-        'Content-Type': 'application/json',
-        ...(GULAND_CONFIG.AUTH_TOKEN ? { 'Authorization': `Bearer ${GULAND_CONFIG.AUTH_TOKEN}` } : {}),
-      },
-      next: { revalidate: 0 },
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://guland.vn/',
+        'Origin': 'https://guland.vn',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
     });
 
-    if (!apiRes.ok) {
-      const text = await apiRes.text();
-      console.error('Detail-layer upstream error', apiRes.status, text);
-      return NextResponse.json(
-        { success: false, message: 'Upstream detail-layer error', status: apiRes.status },
-        { status: 502 },
-      );
-    }
-
-    let data: any;
-    try {
-      data = await apiRes.json();
-    } catch (jsonErr) {
-      const text = await apiRes.text();
-      console.error('Detail-layer non-JSON response, returning as text');
-      return NextResponse.json({ success: false, html: text, status: apiRes.status }, { status: apiRes.status });
-    }
-
-    return NextResponse.json(data, { status: 200 });
-
+    // Return the image with appropriate headers
+    return new NextResponse(response.data, {
+      headers: {
+        'Content-Type': response.headers['content-type'] || 'image/png',
+        'Cache-Control': 'public, max-age=86400', // Cache for 1 day
+      }
+    });
   } catch (error) {
-    console.error('Detail layer error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Error proxying tile:', error);
+    return NextResponse.json({ success: false, message: 'Failed to fetch tile' }, { status: 500 });
   }
 } 
