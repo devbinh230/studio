@@ -7,10 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MapPin, Loader2, Navigation, Search, X, Map, Image } from 'lucide-react';
+import { MapPin, Loader2, Navigation, Search, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/use-debounce';
-import { getGeoapifyApiKey } from '@/lib/config';
 
 // Dynamic import của Leaflet components để tránh SSR issues
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
@@ -99,7 +98,7 @@ export function InteractiveMapSimple({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   
   // Debounce search input để tránh gọi API quá nhiều
-  const debouncedSearchAddress = useDebounce(searchAddress, 1000);
+  const debouncedSearchAddress = useDebounce(searchAddress, 750);
   const [mapCenter, setMapCenter] = useState<[number, number]>([initialLocation.lat, initialLocation.lng]);
   const [mapZoom, setMapZoom] = useState(15);
   const [markerPosition, setMarkerPosition] = useState<[number, number] | null>(null);
@@ -236,21 +235,21 @@ export function InteractiveMapSimple({
 
     setIsLoadingSuggestions(true);
     try {
-      // Using Geoapify Autocomplete API with Vietnam bias
+      // Using internal search suggestions API
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
+        `/api/mapbox-search?q=${encodeURIComponent(query)}`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
-          lat: feature.properties.lat,
-          lon: feature.properties.lon,
-          place_id: feature.properties.place_id || Math.random().toString(),
-          address_line1: feature.properties.address_line1,
-          address_line2: feature.properties.address_line2,
-          category: feature.properties.category,
+          formatted: feature.properties.place_formatted || feature.properties.name || '',
+          lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
+          lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
+          place_id: feature.properties.mapbox_id || Math.random().toString(),
+          address_line1: feature.properties.name || '',
+          address_line2: feature.properties.place_formatted || '',
+          category: feature.properties.feature_type || 'address',
         }));
         
         setSuggestions(suggestionsList);
@@ -359,20 +358,20 @@ export function InteractiveMapSimple({
     
     setIsLoading(true);
     try {
-      // Using Geoapify Geocoding API
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchAddress)}&apiKey=${getGeoapifyApiKey()}`
+        `/api/mapbox-search?q=${encodeURIComponent(searchAddress)}&limit=1`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
-        const { lat, lon } = feature.properties;
+        const lat = feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0;
+        const lon = feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0;
         
         const locationData: LocationData = {
           latitude: lat,
           longitude: lon,
-          address: feature.properties.formatted || searchAddress,
+          address: feature.properties.place_formatted || feature.properties.name || searchAddress,
         };
         
         setSelectedLocation(locationData);
@@ -385,7 +384,7 @@ export function InteractiveMapSimple({
         
         toast({
           title: "Tìm thấy địa chỉ",
-          description: feature.properties.formatted || searchAddress,
+          description: feature.properties.place_formatted || feature.properties.name || searchAddress,
         });
       } else {
         toast({

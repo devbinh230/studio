@@ -104,6 +104,8 @@ async function apiCall<T>(
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
+        // Include Authorization header if a token is configured
+        ...(GULAND_CONFIG.AUTH_TOKEN ? { 'Authorization': `Bearer ${GULAND_CONFIG.AUTH_TOKEN}` } : {}),
       },
     });
 

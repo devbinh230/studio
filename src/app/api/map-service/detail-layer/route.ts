@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GULAND_CONFIG } from '@/lib/config';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,12 +14,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Call FastAPI detail-layer endpoint
-    const apiUrl = `${process.env.NEXT_PUBLIC_GULAND_SERVER_URL || 'http://localhost:8000'}/map-service/detail-layer?id=${id}`;
+    const apiUrl = `${GULAND_CONFIG.SERVER_URL}/map-service/detail-layer?id=${id}`;
 
     console.log('🔗 Fetching detail-layer from FastAPI:', apiUrl);
 
     const apiRes = await fetch(apiUrl, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(GULAND_CONFIG.AUTH_TOKEN ? { 'Authorization': `Bearer ${GULAND_CONFIG.AUTH_TOKEN}` } : {}),
+      },
       next: { revalidate: 0 },
     });
 

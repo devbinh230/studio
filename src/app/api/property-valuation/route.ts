@@ -4,6 +4,98 @@ import { searchRealEstateData } from '@/lib/search-utils';
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * @swagger
+ * /api/property-valuation:
+ *   post:
+ *     summary: Generate property valuation estimate
+ *     description: Calculates property value range based on detailed property characteristics and market data
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - latitude
+ *               - longitude
+ *               - property_details
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 description: Property latitude coordinate
+ *               longitude:
+ *                 type: number
+ *                 description: Property longitude coordinate
+ *               property_details:
+ *                 type: object
+ *                 properties:
+ *                   type:
+ *                     type: string
+ *                     description: Property type (e.g., nha_trong_hem, nha_pho)
+ *                   landArea:
+ *                     type: number
+ *                     description: Land area in m²
+ *                   houseArea:
+ *                     type: number
+ *                     description: House floor area in m²
+ *                   facadeWidth:
+ *                     type: number
+ *                     description: Facade width in meters
+ *                   roadWidth:
+ *                     type: string
+ *                     description: Road width category
+ *                   bedRoom:
+ *                     type: number
+ *                     description: Number of bedrooms
+ *                   bathRoom:
+ *                     type: number
+ *                     description: Number of bathrooms
+ *                   storyNumber:
+ *                     type: number
+ *                     description: Number of stories
+ *                   legal:
+ *                     type: string
+ *                     description: Legal status (e.g., red_book, pink_book)
+ *                   yearBuilt:
+ *                     type: number
+ *                     description: Year the property was built
+ *               auth_token:
+ *                 type: string
+ *                 description: Authentication token
+ *     responses:
+ *       200:
+ *         description: Successful property valuation
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 ai_valuation:
+ *                   type: object
+ *                   properties:
+ *                     lowValue:
+ *                       type: number
+ *                       description: Lower bound of valuation range
+ *                     reasonableValue:
+ *                       type: number
+ *                       description: Reasonable market value estimate
+ *                     highValue:
+ *                       type: number
+ *                       description: Upper bound of valuation range
+ *                     price_house:
+ *                       type: number
+ *                       description: Estimated building value (without land)
+ *                     price_gov_place:
+ *                       type: object
+ *                       description: Government reference price information
+ *       400:
+ *         description: Missing required parameters
+ *       500:
+ *         description: Error processing valuation
+ */
 // Helper function to format market data for AI prompt
 function formatMarketDataForAI(priceTrendData: any): string {
   if (!priceTrendData?.data || !Array.isArray(priceTrendData.data)) {

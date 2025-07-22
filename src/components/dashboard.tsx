@@ -28,7 +28,7 @@ import type { CombinedResult } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Search, Home, TrendingUp, CheckCircle, Info, Map, ExternalLink, Globe } from 'lucide-react';
+import { MapPin, Search, Home, TrendingUp, CheckCircle, Info, Map, ExternalLink, Globe, AlertTriangle } from 'lucide-react';
 
 interface LocationData {
   latitude: number;
@@ -44,10 +44,26 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
-  const [showMap, setShowMap] = useState(true); // Show map by default
+  const [showMap, setShowMap] = useState(true);
+
   const [areaPrices, setAreaPrices] = useState<Record<string, string> | null>(null);
 
-  // Fetch area prices whenever we have a result (after valuation)
+  const [planningAnalysisArea, setPlanningAnalysisArea] = useState<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
+  const [isPlanningAnalysisLoading, setIsPlanningAnalysisLoading] = useState(false);
+  const [planningAnalysisResult, setPlanningAnalysisResult] = useState<{
+    currentStatus: string;
+    newPlanning: string;
+    affectedArea: string;
+    impactLevel: string;
+    notes: string;
+  } | null>(null);
+
+
   useEffect(() => {
     if (!result) return;
 
@@ -77,11 +93,27 @@ export default function Dashboard() {
     }
   }, [result]);
 
+  useEffect(() => {
+    if (!result || !selectedLocation) return;
+
+    setIsPlanningAnalysisLoading(true);
+    fetch(`/api/planning-analysis?lat=${selectedLocation.lat}&lng=${selectedLocation.lng}`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) {
+          setPlanningAnalysisArea(json.area);
+          setPlanningAnalysisResult(json.result);
+        }
+      })
+      .catch(err => console.error('Fetch planning analysis error:', err))
+      .finally(() => setIsPlanningAnalysisLoading(false));
+  }, [result, selectedLocation]);
+
   const handleValuation = (data: CombinedResult | null) => {
     if (data) {
       setResult(data);
       setError(null);
-      setShowMap(false); // Hide map when results are shown
+      setShowMap(false);
     }
   };
 
@@ -97,6 +129,66 @@ export default function Dashboard() {
     setError(null);
     setShowMap(true);
     setSelectedLocation(null);
+  };
+
+  const handlePlanningAnalysisArea = async (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => {
+    setPlanningAnalysisArea(bounds);
+    setIsPlanningAnalysisLoading(true);
+
+    try {
+      // In a real implementation, you would:
+      // 1. Capture the map screenshot
+      // 2. Upload it or process it
+      // 3. Call the planning analysis API with the image and location info
+      
+      // For now, simulate an API call with a timeout
+      setTimeout(() => {
+        // Mock result - this would come from the actual API
+        setPlanningAnalysisResult({
+          currentStatus: "Đất ở đô thị - ODT (Hồng)",
+          newPlanning: "Khu dân cư mới QH-2030",
+          affectedArea: "~150m² (~30%)",
+          impactLevel: "🟡 TRUNG BÌNH",
+          notes: "Phần phía Đông bị ảnh hưởng bởi đường quy hoạch mới"
+        });
+        setIsPlanningAnalysisLoading(false);
+      }, 2000);
+      
+      // In production, you'd call the actual API:
+      /*
+      const response = await fetch('/api/planning-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imagePath: '/path/to/captured/image.png',
+          landInfo: `Địa chỉ: ${selectedLocation?.address || ''}
+                    Tọa độ: ${selectedLocation?.latitude}, ${selectedLocation?.longitude}
+                    Vùng phân tích: Bắc (${bounds.north}), Nam (${bounds.south}), Đông (${bounds.east}), Tây (${bounds.west})`
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Lỗi khi phân tích quy hoạch');
+      }
+      
+      const data = await response.json();
+      setPlanningAnalysisResult(data);
+      */
+      
+    } catch (err) {
+      console.error('Error during planning analysis:', err);
+      setError(`Lỗi khi phân tích quy hoạch: ${(err as Error).message}`);
+      setPlanningAnalysisResult(null);
+    } finally {
+      setIsPlanningAnalysisLoading(false);
+    }
   };
 
   return (
@@ -227,6 +319,63 @@ export default function Dashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {/* Planning Analysis Results */}
+                    {planningAnalysisResult && (
+                      <div className="mb-4">
+                        <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-blue-800 mb-2">📊 Kết quả phân tích quy hoạch</h4>
+                            <button 
+                              onClick={() => setPlanningAnalysisResult(null)} 
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Hiện trạng:</p>
+                              <p className="text-sm font-medium">{planningAnalysisResult.currentStatus}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Quy hoạch mới:</p>
+                              <p className="text-sm font-medium">{planningAnalysisResult.newPlanning}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Diện tích ảnh hưởng:</p>
+                              <p className="text-sm font-medium">{planningAnalysisResult.affectedArea}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600 mb-1">Mức độ tác động:</p>
+                              <p className="text-sm font-medium">{planningAnalysisResult.impactLevel}</p>
+                            </div>
+                          </div>
+                          {planningAnalysisResult.notes && (
+                            <div className="mt-3 pt-3 border-t border-blue-200">
+                              <div className="flex gap-2 items-start">
+                                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5" />
+                                <p className="text-sm text-gray-700">{planningAnalysisResult.notes}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Loading state for planning analysis */}
+                    {isPlanningAnalysisLoading && (
+                      <div className="mb-4">
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-blue-500"></div>
+                            <p className="text-gray-600">Đang phân tích quy hoạch...</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="mb-4">
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <h4 className="font-semibold text-blue-800 mb-2">🗺️ Tính năng bản đồ</h4>
@@ -234,8 +383,7 @@ export default function Dashboard() {
                           <li>• Click vào bản đồ để xem thông tin quy hoạch chi tiết</li>
                           <li>• Chuyển đổi giữa các layer: QH 2030, QH 1/500, QH phân khu</li>
                           <li>• Tìm kiếm địa chỉ và xem thông tin thửa đất</li>
-                          <li>• Zoom để xem chi tiết ở mức độ cao</li>
-                          <li>• Xem thông tin tiện ích xung quanh</li>
+                          <li>• <strong>Mới:</strong> Vẽ vùng phân tích để xem tác động quy hoạch</li>
                         </ul>
                       </div>
                     </div>
@@ -284,6 +432,7 @@ export default function Dashboard() {
                           {/* Interactive Map */}
                           <div className="rounded-lg overflow-hidden border border-green-200 shadow-lg">
                             <HanoiPlanningMap
+                              key={`planning-map-${lat}-${lng}`} // Force re-render when coordinates change
                               height="600px"
                               showControls={true}
                               className="planning-map-container"
@@ -293,6 +442,7 @@ export default function Dashboard() {
                               initialZoom={16}
                               autoClickOnLoad={true}
                               showHanoiLandLayer={lat >= 20.8 && lat <= 21.4 && lng >= 105.3 && lng <= 106.0}
+                              onAnalysisArea={handlePlanningAnalysisArea}
                             />
                           </div>
                           

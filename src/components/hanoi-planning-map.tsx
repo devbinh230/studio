@@ -1,9 +1,10 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polygon, ZoomControl, Rectangle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useDebounce } from '@/hooks/use-debounce';
 import { getGeoapifyApiKey } from '@/lib/config';
 
 // Interface for planning data
@@ -66,13 +67,13 @@ function MapAddressSearch({
   onLocationSelect: (lat: number, lng: number, address: string) => void 
 }) {
   const [searchValue, setSearchValue] = useState('');
+  const debouncedSearchValue = useDebounce(searchValue, 750);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Close suggestions when clicking outside and cleanup timeout
   useEffect(() => {
@@ -93,9 +94,6 @@ function MapAddressSearch({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       // Cleanup timeout on unmount
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
     };
   }, []);
 
@@ -109,21 +107,20 @@ function MapAddressSearch({
 
     setIsLoadingSuggestions(true);
     try {
-      const geoapifyApiKey = getGeoapifyApiKey();
       const response = await fetch(
-        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${geoapifyApiKey}`
+        `/api/mapbox-search?q=${encodeURIComponent(query)}&limit=5`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
-          lat: feature.properties.lat,
-          lon: feature.properties.lon,
-          place_id: feature.properties.place_id || Math.random().toString(),
-          address_line1: feature.properties.address_line1,
-          address_line2: feature.properties.address_line2,
-          category: feature.properties.category,
+          formatted: feature.properties.place_formatted || feature.properties.name || '',
+          lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
+          lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
+          place_id: feature.properties.mapbox_id || Math.random().toString(),
+          address_line1: feature.properties.name || '',
+          address_line2: feature.properties.place_formatted || '',
+          category: feature.properties.feature_type || 'address',
         }));
         
         setSuggestions(suggestionsList);
@@ -162,16 +159,6 @@ function MapAddressSearch({
     const value = e.target.value;
     setSearchValue(value);
     setSelectedSuggestionIndex(-1);
-    
-    // Clear previous timeout if exists
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    // Set new timeout for debouncing
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchSuggestions(value);
-    }, 300);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -203,6 +190,16 @@ function MapAddressSearch({
         break;
     }
   };
+
+  // Fetch suggestions when debounced value changes
+  useEffect(() => {
+    if (debouncedSearchValue.trim().length > 1) {
+      fetchSuggestions(debouncedSearchValue);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [debouncedSearchValue]);
 
   return (
     <div className="relative w-80 max-w-[calc(100vw-2rem)] sm:max-w-sm">
@@ -1391,6 +1388,12 @@ interface HanoiPlanningMapProps {
   initialZoom?: number;
   autoClickOnLoad?: boolean; // Tự động click để load thông tin quy hoạch
   showHanoiLandLayer?: boolean; // Hiển thị layer đất đai Hà Nội (chỉ dành cho khu vực Hà Nội)
+  onAnalysisArea?: (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => void; // Callback khi người dùng chọn vùng để phân tích
 }
 
 /**
@@ -1444,6 +1447,132 @@ function MapTypeButtons({
   );
 }
 
+// Add this new component for drawing bounding boxes
+function BoundingBoxDrawer({
+  enabled,
+  onComplete,
+}: {
+  enabled: boolean;
+  onComplete: (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => void;
+}) {
+  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
+  const [currentPoint, setCurrentPoint] = useState<[number, number] | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawnBounds, setDrawnBounds] = useState<[[number, number], [number, number]] | null>(null);
+
+  // Reset state when enabled changes
+  useEffect(() => {
+    if (!enabled) {
+      setStartPoint(null);
+      setCurrentPoint(null);
+      setIsDrawing(false);
+      setDrawnBounds(null);
+    }
+  }, [enabled]);
+
+  const map = useMapEvents({
+    mousedown: (e) => {
+      if (!enabled) return;
+      
+      // Start drawing
+      const { lat, lng } = e.latlng;
+      setStartPoint([lat, lng]);
+      setCurrentPoint([lat, lng]);
+      setIsDrawing(true);
+      setDrawnBounds(null);
+    },
+    mousemove: (e) => {
+      if (!enabled || !isDrawing || !startPoint) return;
+      
+      // Update current point while dragging
+      const { lat, lng } = e.latlng;
+      setCurrentPoint([lat, lng]);
+    },
+    mouseup: (e) => {
+      if (!enabled || !isDrawing || !startPoint || !currentPoint) return;
+      
+      // Complete drawing
+      const { lat, lng } = e.latlng;
+      setIsDrawing(false);
+      
+      const bounds = [
+        [
+          Math.min(startPoint[0], lat), 
+          Math.min(startPoint[1], lng)
+        ],
+        [
+          Math.max(startPoint[0], lat),
+          Math.max(startPoint[1], lng)
+        ]
+      ] as [[number, number], [number, number]];
+      
+      setDrawnBounds(bounds);
+      
+      // Call onComplete with formatted bounds
+      onComplete({
+        north: bounds[1][0], // max lat
+        south: bounds[0][0], // min lat
+        east: bounds[1][1],  // max lng
+        west: bounds[0][1]   // min lng
+      });
+    }
+  });
+
+  // Calculate current bounds during drawing
+  const currentBounds = useMemo(() => {
+    if (!startPoint || !currentPoint) return null;
+    
+    return [
+      [
+        Math.min(startPoint[0], currentPoint[0]), 
+        Math.min(startPoint[1], currentPoint[1])
+      ],
+      [
+        Math.max(startPoint[0], currentPoint[0]),
+        Math.max(startPoint[1], currentPoint[1])
+      ]
+    ] as [[number, number], [number, number]];
+  }, [startPoint, currentPoint]);
+
+  if (!enabled) return null;
+
+  return (
+    <>
+      {/* Show the rectangle being drawn */}
+      {isDrawing && currentBounds && (
+        <Rectangle
+          bounds={currentBounds}
+          pathOptions={{ 
+            color: '#2196f3', 
+            weight: 2, 
+            fillColor: '#2196f3', 
+            fillOpacity: 0.2,
+            dashArray: '5, 5' 
+          }}
+        />
+      )}
+      
+      {/* Show the completed rectangle */}
+      {!isDrawing && drawnBounds && (
+        <Rectangle
+          bounds={drawnBounds}
+          pathOptions={{ 
+            color: '#0d47a1', 
+            weight: 3, 
+            fillColor: '#2196f3', 
+            fillOpacity: 0.3 
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export default function HanoiPlanningMap({ 
   height = '500px', 
   showControls = true, 
@@ -1453,7 +1582,8 @@ export default function HanoiPlanningMap({
   initialLng,
   initialZoom,
   autoClickOnLoad = false,
-  showHanoiLandLayer
+  showHanoiLandLayer,
+  onAnalysisArea
 }: HanoiPlanningMapProps) {
   const [isClient, setIsClient] = useState(false);
   const [geoapifyApiKey, setGeoapifyApiKey] = useState<string | null>(null);
@@ -1481,6 +1611,59 @@ export default function HanoiPlanningMap({
   const [layer1Name, setLayer1Name] = useState('quy hoạch2030');
   const [geocodingData, setGeocodingData] = useState<any>(null);
   const geocodingFetched = useRef(false);
+  const [isDrawingBoundingBox, setIsDrawingBoundingBox] = useState(false);
+  const [analysisAreaBounds, setAnalysisAreaBounds] = useState<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
+
+  // Handler for bounding box completion
+  const handleBoundingBoxComplete = (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => {
+    console.log('Bounding box drawn:', bounds);
+    setAnalysisAreaBounds(bounds);
+    
+    // Call the callback if provided
+    if (onAnalysisArea) {
+      onAnalysisArea(bounds);
+    }
+    
+    // Exit drawing mode after completion
+    setIsDrawingBoundingBox(false);
+  };
+
+  // Add this for screenshot capturing
+  const captureAreaScreenshot = async () => {
+    if (!mapInstance || !analysisAreaBounds) return;
+    
+    try {
+      // Convert the map to a visible HTML element that can be captured
+      const mapContainer = mapInstance.getContainer();
+      
+      // Use html-to-image or similar library to capture the map
+      // This is just a placeholder - actual implementation will depend on libraries available
+      console.log('Capturing screenshot of area:', analysisAreaBounds);
+      
+      // You would typically:
+      // 1. Zoom/pan the map to fit the bounds
+      // 2. Capture the visible area
+      // 3. Save or process the image
+      
+      // For now we'll just log that it would happen
+      console.log('Screenshot would be captured here');
+      
+      return '/path/to/captured/image.png'; // Placeholder return
+    } catch (error) {
+      console.error('Error capturing screenshot:', error);
+      return null;
+    }
+  };
 
   // Add new state for special modal handling
   const [showSpecialModal, setShowSpecialModal] = useState(false);
@@ -2515,6 +2698,12 @@ export default function HanoiPlanningMap({
             onMapReady={setMapInstance}
           />
           
+          {/* Add the BoundingBoxDrawer component */}
+          <BoundingBoxDrawer 
+            enabled={isDrawingBoundingBox} 
+            onComplete={handleBoundingBoxComplete} 
+          />
+          
           {/* Planning Overlay Manager - Disabled to remove demo overlays */}
           {/* <PlanningOverlayManager 
             map={mapInstance}
@@ -3227,6 +3416,60 @@ export default function HanoiPlanningMap({
       {/* Map Type Buttons - Removed from outside the map container */}
       
       {/* ... existing code ... */}
+
+      {/* Add analysis tools panel */}
+      {showControls && (
+        <div className="absolute top-4 right-4 z-[1000]">
+          <div className="bg-white rounded-lg shadow-md border p-2 space-y-2">
+            <button
+              onClick={() => setIsDrawingBoundingBox(!isDrawingBoundingBox)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                isDrawingBoundingBox
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+              title={isDrawingBoundingBox ? 'Hủy vẽ' : 'Vẽ vùng phân tích'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <span className="hidden sm:inline">{isDrawingBoundingBox ? 'Hủy vẽ' : 'Vẽ vùng phân tích'}</span>
+            </button>
+            
+            {analysisAreaBounds && (
+              <button
+                onClick={captureAreaScreenshot}
+                className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors w-full"
+                title="Phân tích quy hoạch"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                <span className="hidden sm:inline">Phân tích quy hoạch</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isDrawingBoundingBox && (
+        <div className="absolute top-16 left-4 right-4 z-[1000] bg-blue-100 bg-opacity-90 text-blue-800 p-3 rounded-lg shadow-md border border-blue-300">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="font-medium mb-1">Đang trong chế độ vẽ vùng phân tích</p>
+              <ol className="text-sm space-y-1 list-decimal list-inside">
+                <li>Click chuột vào một điểm để bắt đầu</li>
+                <li>Giữ và kéo để tạo một hình chữ nhật</li>
+                <li>Thả chuột để hoàn thành</li>
+              </ol>
+              <p className="text-xs mt-1">Nhấn nút "Hủy vẽ" để thoát khỏi chế độ vẽ</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
