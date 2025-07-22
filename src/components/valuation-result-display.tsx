@@ -28,7 +28,9 @@ import {
   Users,
   Heart,
   Lightbulb,
-  Calculator
+  Calculator,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { UtilitiesInteractiveMap } from '@/components/utilities-interactive-map';
 import { PriceTrendChart } from '@/components/price-trend-chart';
@@ -45,6 +47,39 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
   let radarScore: any = null;
   let isMockData = false;
   let isAIEnhanced = false;
+
+  // Area prices (giá khu vực xung quanh)
+  const [areaPrices, setAreaPrices] = React.useState<Record<string, string> | null>(null);
+
+  // Fetch area prices once component is mounted
+  React.useEffect(() => {
+    let lat: number | undefined, lng: number | undefined;
+
+    if (data.input_data?.coordinates && Array.isArray(data.input_data.coordinates) && data.input_data.coordinates.length === 2) {
+      lat = data.input_data.coordinates[0];
+      lng = data.input_data.coordinates[1];
+    } else if (data.valuation_payload?.geoLocation && Array.isArray(data.valuation_payload.geoLocation) && data.valuation_payload.geoLocation.length === 2) {
+      lng = data.valuation_payload.geoLocation[0];
+      lat = data.valuation_payload.geoLocation[1];
+    } else if (result?.geoLocation && Array.isArray(result.geoLocation) && result.geoLocation.length === 2) {
+      lng = result.geoLocation[0];
+      lat = result.geoLocation[1];
+    } else if (data.valuation_result?.evaluation?.geoLocation && Array.isArray(data.valuation_result.evaluation.geoLocation) && data.valuation_result.evaluation.geoLocation.length === 2) {
+      lng = data.valuation_result.evaluation.geoLocation[0];
+      lat = data.valuation_result.evaluation.geoLocation[1];
+    }
+
+    if (lat && lng) {
+      fetch(`/api/area-prices?lat=${lat}&lng=${lng}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            setAreaPrices(json.data);
+          }
+        })
+        .catch((err) => console.error('Fetch area prices error:', err));
+    }
+  }, []);
 
   if (hasEvaluation) {
     result = {
@@ -503,8 +538,13 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
           city={address.city}
           district={address.district}
           category={result.type || 'town_house'}
-          data={data.price_trend.success ? data.price_trend.data : undefined}
+          data={data.price_trend?.success ? data.price_trend.data : undefined}
           className="mb-6"
+          roadStats={areaPrices ? {
+            avg: areaPrices['Giá trị định giá Đất trung bình'],
+            low: areaPrices['Giá trị định giá Đất thấp nhất'],
+            high: areaPrices['Giá trị định giá Đất cao nhất'],
+          } : undefined}
         />
       )}
 
@@ -894,8 +934,11 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
               </div>
             );
           })()}
+
         </CardContent>
       </Card>
+
+      {/* Removed Valuation Summary & Area Prices Cards (moved and integrated elsewhere) */}
 
       {/* Bản đồ tiện ích xung quanh - Phần cuối */}
       {(() => {
@@ -967,7 +1010,6 @@ export function ValuationResultDisplay({ data }: ValuationResultProps) {
           />
         );
       })()}
-
       <Card className="bg-gray-50">
         <CardContent className="pt-6">
           <div className="flex flex-wrap justify-between items-center text-sm text-gray-600">
