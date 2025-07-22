@@ -27,7 +27,6 @@ async function reverseGeocode(lat: number, lon: number): Promise<string> {
     'sec-fetch-mode': 'cors', 
     'sec-fetch-site': 'same-origin', 
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 
-    // 'Cookie': '_gid=GA1.2.1921896142.1752728760; _fbp=fb.1.1752728760135.266614221557997382; _gcl_au=1.1.205081394.1752728760; _ym_uid=1752728761820203697; _ym_d=1752728761; _ga_60Y1MN1ELG=GS2.1.s1752807688^$o3^$g0^$t1752807688^$j60^$l0^$h0; _ga=GA1.1.477584981.1752728100; _ym_isad=2; _ym_visorc=w; _ga_M2CFDW2LED=GS2.1.s1752807652^$o2^$g1^$t1752807910^$j60^$l0^$h0'
     'Cookie': GOONG_COOKIE,  
   }
 
