@@ -468,8 +468,8 @@ export function PriceTrendChart({
                 <div className="text-center mb-3">
                   <p className="text-sm font-medium text-slate-700">
                     {roadName 
-                      ? `Định giá đường ${roadName}, quận ${getDistrictName(district)}, ${getCityName(city)}` 
-                      : `Định giá đường ${getLocationName(city, district)}`}
+                      ? `Định giá đường ${roadName}` 
+                      : `Định giá đường `}
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-4">

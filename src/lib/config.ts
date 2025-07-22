@@ -21,6 +21,10 @@ export const config = {
     authToken: process.env.RESTA_AUTH_TOKEN || process.env.NEXT_PUBLIC_RESTA_AUTH_TOKEN
   },
 
+  goong: {
+    cookie: process.env.GOONG_COOKIE
+  },
+
   // Geoapify API Configuration
   geoapify: {
     apiKey: process.env.GEOAPIFY_API_KEY || process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
@@ -30,8 +34,7 @@ export const config = {
   perplexity: {
     apiKey: process.env.PERPLEXITY_API_KEY,
     baseUrl: process.env.PERPLEXITY_API_URL || "https://api.perplexity.ai/chat/completions",
-    // timeout: 10000, // 10 seconds timeout
-    timeout: 100, // 10 seconds timeout
+    timeout: 10000, // 10 seconds timeout
     model: process.env.PERPLEXITY_MODEL || 'sonar-pro', // Default model for Perplexity
   },
 
