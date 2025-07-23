@@ -1,10 +1,11 @@
 // API Configuration from Environment Variables
+
+const rawBaseUrl = process.env.PROXY_SERVER_URL || process.env.AI_SERVER_PROXY_URL || '';
+const baseUrl = rawBaseUrl ? `${rawBaseUrl.replace(/\/$/, '')}/chat/completions` : '';
 export const config = {
   // Proxy Server Configuration (Primary AI provider)
   proxy: {
-    // Support both naming conventions: PROXY_SERVER_* (preferred) or AI_SERVER_PROXY_* (legacy)
-    baseUrl: process.env.PROXY_SERVER_URL || process.env.AI_SERVER_PROXY_URL,
-    // Strip optional "Bearer " prefix if present in env value to avoid double prefixing later
+    baseUrl,
     apiKey: (() => {
       const raw = process.env.PROXY_SERVER_API_KEY || process.env.AI_SERVER_PROXY_API_KEY || '';
       return raw.startsWith('Bearer ') ? raw.replace(/^Bearer\s+/i, '') : raw;

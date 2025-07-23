@@ -417,7 +417,7 @@ export function PriceTrendChart({
                 {hoveredData ? (
                   <>Thông tin tháng <span className="text-amber-600 font-semibold">{hoveredData.month}</span></>
                 ) : (
-                  <>Thống kê tổng quan</>
+                  <>Thống kê tổng quan theo {getDistrictName(district)}</>
                 )}
               </p>
               {hoveredData && hoveredData.count && (
@@ -469,7 +469,7 @@ export function PriceTrendChart({
                   <p className="text-sm font-medium text-slate-700">
                     {roadName 
                       ? `Định giá đường ${roadName}` 
-                      : `Định giá đường `}
+                      : `Định giá theo đường `}
                   </p>
                 </div>
                 <div className="grid grid-cols-3 gap-4">

@@ -87,7 +87,7 @@ Dữ liệu thị trường bất động sản (${data.length} tháng gần nh�
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { latitude, longitude, property_details, auth_token } = body;
+    const { latitude, longitude, property_details, auth_token, cafelandAvg } = body;
 
     if (!latitude || !longitude) {
       return NextResponse.json(
@@ -675,7 +675,8 @@ export async function POST(request: NextRequest) {
         price_gov: sharedPriceGov,
         alleyType: mergedDetails.alleyType || 'thong',
         houseDirection: mergedDetails.houseDirection || 'nam',
-        soShape: mergedDetails.soShape || 'vuong'
+        soShape: mergedDetails.soShape || 'vuong',
+        price_cafeland: cafelandAvg || undefined // <-- Thêm giá trung bình Cafeland
       };
 
       // 🔍 DEBUG AI INPUT DATA
