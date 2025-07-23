@@ -51,23 +51,24 @@ async function reverseGeocode(lat: number, lon: number): Promise<string> {
   let formatted_address;
   if (rawAddress === 'N/A') {
     formatted_address = 'N/A';
-  } else if (commaCount === 2) {
+  } else if (commaCount <= 2) {
     // Nếu rawAddress có đúng 2 dấu phẩy, lấy formatted_address từ data.results[0].formatted_address
     formatted_address = data.results[0].formatted_address || 'N/A';
-    formatted_address = formatted_address.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+    formatted_address = formatted_address.replace(/Đ\./g, 'Đường').replace(/^\d+\s*/, '');
+ 
+    formatted_address = formatted_address.replace(/(Quận|Thành Phố|Phố|Phường|Đường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
   } else {
     // Thay thế Đ. thành Đường
     rawAddress = rawAddress.replace(/Đ\./g, 'Đường');
     // Loại bỏ số ở phía trước dấu phẩy đầu tiên
     rawAddress = rawAddress.replace(/^\d+\s*/, '');
-  
     const match = rawAddress.match(/Đường\s+([^,]+),(.+)/);
     if (match) {
       // Trường hợp có "Đường"
-      formatted_address = `${match[1]},${match[2]}`.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+      formatted_address = `${match[1]},${match[2]}`.replace(/(Quận|Thành Phố|Phố|Phường|Đường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
     } else {
       // Trường hợp không có "Đường"
-      formatted_address = rawAddress.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+      formatted_address = rawAddress.replace(/(Quận|Thành Phố|Phố|Phường|Đường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
     }
   }
   
@@ -92,6 +93,29 @@ async function fetchCafelandHrefs(keyword: string): Promise<string[]> {
   const html = await res.text();
   const dom = new JSDOM(html);
   const links = Array.from(dom.window.document.querySelectorAll('div.tim-khu-vuc-dg ul li a')) as HTMLAnchorElement[];
+
+  // So sánh textContent của span trong mỗi href với keyword, chọn href khớp nhiều nhất
+  let bestHref: string | null = null;
+  let maxMatch = 0;
+  for (const a of links) {
+    const span = a.querySelector('span');
+    if (!span) continue;
+    const spanText = span.textContent?.toLowerCase() || '';
+    const keywordLower = keyword.toLowerCase();
+    // Đếm số ký tự liên tiếp khớp từ đầu
+    let matchCount = 0;
+    for (let i = 0; i < Math.min(spanText.length, keywordLower.length); i++) {
+      if (spanText[i] === keywordLower[i]) matchCount++;
+      else break;
+    }
+    if (matchCount > maxMatch) {
+      maxMatch = matchCount;
+      bestHref = a.getAttribute('href') || '';
+    }
+    // Nếu matchCount == maxMatch, giữ lại href đầu tiên (không thay đổi bestHref)
+  }
+  if (bestHref) return [bestHref];
+  // Nếu không có span nào khớp, fallback trả về tất cả href như cũ
   return links.map((l) => l.getAttribute('href') || '').filter(Boolean);
 }
 
@@ -157,7 +181,7 @@ export async function GET(request: NextRequest) {
     const priceTables = await Promise.all(hrefs.map(fetchPriceTable));
     const aggregated: Record<string, string> = {};
     priceTables.forEach((tbl) => Object.assign(aggregated, tbl));
-
+    console.log('aggregated', aggregated);
     return NextResponse.json({ success: true, data: aggregated });
   } catch (err: any) {
     console.error('area-prices API error:', err);
