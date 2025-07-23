@@ -220,7 +220,8 @@ export const GULAND_CONFIG = {
     ROAD_POINTS: '/road-points',
     GEOCODING_POST: '/geocoding-post',
     REFRESH_TOKEN: '/refresh-token',
-    HEALTH: '/health'
+    HEALTH: '/health',
+    PROCESS_MAP: '/process-map'
   },
   PROXY_ENDPOINTS: {
     HEALTH: '/api/guland-proxy/health',

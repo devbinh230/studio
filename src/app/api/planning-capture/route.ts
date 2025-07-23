@@ -4,13 +4,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateAIPlanningImageUrl, capturePlanningImages } from '@/lib/planning-utils';
 import fs from 'fs';
 import path from 'path';
+import { GULAND_CONFIG } from '@/lib/config';
 
 /**
  * @swagger
  * /api/planning-capture:
  *   post:
- *     summary: Capture planning map images based on coordinates
- *     description: Takes latitude and longitude coordinates as input and returns tile URLs and boundary polygon data
+ *     summary: Capture planning map images based on coordinates and process with external API
+ *     description: |
+ *       Takes latitude and longitude coordinates as input, returns tile URLs, boundary polygon data, and also calls an external process-map API for further processing. 
+ *       
+ *       **Note:** This endpoint will forward the generated planning data to an external API (`process-map`) with Bearer authentication (token from server config) and return the result as `processMapResult`.
  *     requestBody:
  *       required: true
  *       content:
@@ -44,7 +48,7 @@ import path from 'path';
  *                 description: Map type to use for the composite image
  *     responses:
  *       200:
- *         description: Successfully captured planning map image data
+ *         description: Successfully captured planning map image data and processed with external API
  *         content:
  *           application/json:
  *             schema:
@@ -85,6 +89,12 @@ import path from 'path';
  *                     address:
  *                       type: string
  *                       description: Address of the property (if available)
+ *                     planningData:
+ *                       type: object
+ *                       description: Raw planning data from the planning API
+ *                 processMapResult:
+ *                   type: object
+ *                   description: Result returned from the external process-map API
  *       400:
  *         description: Bad request (missing or invalid parameters)
  *       500:
@@ -92,7 +102,15 @@ import path from 'path';
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (jsonError) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid JSON in request body" 
+      }, { status: 400 });
+    }
     
     // Validate required parameters
     if (!body.lat || !body.lng) {
@@ -185,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Return combined results
-    return NextResponse.json({
+    const responseData = {
       success: true,
       data: {
         imageUrl,
@@ -196,6 +214,49 @@ export async function POST(request: NextRequest) {
         address,
         planningData: planningData?.data || null
       }
+    };
+
+    // Chuẩn hóa payload cho process-map, thêm expires_minutes
+    const processMapPayload = {
+      data: responseData.data,
+      expires_minutes: 10
+    };
+
+    // --- Sửa lỗi URL process-map ---
+    // Đảm bảo SERVER_URL có http/https
+    let processMapUrl = `${GULAND_CONFIG.SERVER_URL}${GULAND_CONFIG.ENDPOINTS.PROCESS_MAP}`;
+    if (!/^https?:\/\//i.test(GULAND_CONFIG.SERVER_URL)) {
+      // Nếu thiếu http/https, báo lỗi rõ ràng
+      return NextResponse.json({
+        success: false,
+        error: `GULAND_CONFIG.SERVER_URL is invalid: ${GULAND_CONFIG.SERVER_URL}. Must start with http:// or https://`
+      }, { status: 500 });
+    }
+    console.log('🌐 Calling process-map API at:', processMapUrl);
+    // --- End sửa lỗi URL ---
+
+    let processMapResult = null;
+    try {
+      const processMapRes = await fetch(processMapUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(GULAND_CONFIG.AUTH_TOKEN ? { 'Authorization': `Bearer ${GULAND_CONFIG.AUTH_TOKEN}` } : {})
+        },
+        body: JSON.stringify(processMapPayload)
+      });
+      if (processMapRes.ok) {
+        processMapResult = await processMapRes.json();
+      } else {
+        processMapResult = { success: false, error: 'Failed to process map', status: processMapRes.status };
+      }
+    } catch (err) {
+      processMapResult = { success: false, error: 'Error calling process-map API', details: (err && typeof err === 'object' && 'message' in err) ? (err as any).message : String(err) };
+    }
+
+    return NextResponse.json({
+      ...responseData,
+      ...(processMapResult && typeof processMapResult === 'object' ? processMapResult : {})
     });
     
   } catch (error: any) {
