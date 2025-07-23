@@ -41,11 +41,36 @@ async function reverseGeocode(lat: number, lon: number): Promise<string> {
   if (!data.results || data.results.length === 0 || data.status !== 'OK') {
     throw new Error('Không tìm thấy kết quả geocoding hoặc yêu cầu không thành công.');
   }
-  const rawAddress = data.results[0].address || 'N/A';
-  const match = rawAddress.match(/Đường\s+([^,]+),(.+)/);
-  const formatted_address = match 
-    ? `${match[1]},${match[2]}`.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim() 
-    : 'N/A';
+  
+  let rawAddress = data.results[0].address || 'N/A';
+  console.log('rawAddress', rawAddress);
+  
+  // Đếm số dấu phẩy trong rawAddress
+  const commaCount = (rawAddress.match(/,/g) || []).length;
+  
+  let formatted_address;
+  if (rawAddress === 'N/A') {
+    formatted_address = 'N/A';
+  } else if (commaCount === 2) {
+    // Nếu rawAddress có đúng 2 dấu phẩy, lấy formatted_address từ data.results[0].formatted_address
+    formatted_address = data.results[0].formatted_address || 'N/A';
+    formatted_address = formatted_address.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+  } else {
+    // Thay thế Đ. thành Đường
+    rawAddress = rawAddress.replace(/Đ\./g, 'Đường');
+    // Loại bỏ số ở phía trước dấu phẩy đầu tiên
+    rawAddress = rawAddress.replace(/^\d+\s*/, '');
+  
+    const match = rawAddress.match(/Đường\s+([^,]+),(.+)/);
+    if (match) {
+      // Trường hợp có "Đường"
+      formatted_address = `${match[1]},${match[2]}`.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+    } else {
+      // Trường hợp không có "Đường"
+      formatted_address = rawAddress.replace(/(Quận|Thành Phố|Phố|Phường)\s*/gi, '').replace(/\s*,\s*/g, ', ').replace(/^,|,$/g, '').trim();
+    }
+  }
+  
   console.log('formatted_address', formatted_address);
   return formatted_address;
 }

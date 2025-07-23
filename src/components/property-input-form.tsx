@@ -474,6 +474,7 @@ type PropertyInputFormProps = {
   setError: (error: string | null) => void;
   selectedLocation?: LocationData | null;
   onLocationSelect?: (location: LocationData) => void;
+  roadStats?: { avg?: string | number };
 };
 
 // Add code to get planning data
@@ -495,6 +496,7 @@ export function PropertyInputForm({
   setError,
   selectedLocation,
   onLocationSelect,
+  roadStats,
 }: PropertyInputFormProps) {
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -810,6 +812,7 @@ export function PropertyInputForm({
         },
         planning_data: planningData,
         auth_token: authToken,
+        price_cafeland: roadStats?.avg,
       };
 
       // Debug logging for payload
@@ -1119,14 +1122,13 @@ export function PropertyInputForm({
                     />
 
                     {/* Mặt tiền (optional) */}
-                    {showAdvanced && (
                       <FormField
                         control={form.control}
                         name="facadeWidth"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-sm font-medium">
-                              Mặt tiền
+                              Mặt tiền <span className="text-red-500">(*)</span>
                             </FormLabel>
                             <FormControl>
                               <div className="relative">
@@ -1146,7 +1148,7 @@ export function PropertyInputForm({
                           </FormItem>
                         )}
                       />
-                    )}
+
 
                     {/* Diện tích sàn */}
                     <FormField
@@ -1364,7 +1366,7 @@ export function PropertyInputForm({
                       )}
                     />
 
-                    {showAdvanced && (
+                  {showAdvanced && (
                       <FormField
                         control={form.control}
                         name="soShape"
@@ -1402,7 +1404,7 @@ export function PropertyInputForm({
                       />
                     )}
                   </div>
-                </div>
+                </div>  
               </div>
 
               {/* SECTION 3: Giá trị nhà trên đất */}

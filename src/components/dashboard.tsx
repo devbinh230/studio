@@ -64,6 +64,7 @@ export default function Dashboard() {
     notes: string;
   } | null>(null);
 
+  const [roadStats, setRoadStats] = useState<{ avg?: string, low?: string, high?: string } | undefined>(undefined);
 
   useEffect(() => {
     if (!result) return;
@@ -98,7 +99,7 @@ export default function Dashboard() {
     if (!result || !selectedLocation) return;
 
     setIsPlanningAnalysisLoading(true);
-    fetch(`/api/planning-analysis?lat=${selectedLocation.lat}&lng=${selectedLocation.lng}`)
+    fetch(`/api/planning-analysis?lat=${selectedLocation.latitude}&lng=${selectedLocation.longitude}`)
       .then(res => res.json())
       .then(json => {
         if (json.success) {
