@@ -812,7 +812,8 @@ export function PropertyInputForm({
         },
         planning_data: planningData,
         auth_token: authToken,
-        price_cafeland: roadStats?.avg,
+        price_cafeland: roadStats?.avg ? Number(roadStats.avg) : undefined,
+
       };
 
       // Debug logging for payload
