@@ -583,20 +583,25 @@ export function PropertyInputForm({
     setIsLoadingSuggestions(true);
     try {
       const response = await fetch(
-        `/api/mapbox-search?q=${encodeURIComponent(query)}`
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(
+          query
+        )}&lang=vi&limit=5&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
       const data = await response.json();
 
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map(
           (feature: any) => ({
-            formatted: feature.properties.place_formatted || feature.properties.name || "",
-            lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
-            lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
-            place_id: feature.properties.mapbox_id || Math.random().toString(),
-            address_line1: feature.properties.name || "",
-            address_line2: feature.properties.place_formatted || "",
-            category: feature.properties.feature_type || "address",
+            formatted:
+              feature.properties.formatted ||
+              feature.properties.address_line1 ||
+              "",
+            lat: feature.properties.lat,
+            lon: feature.properties.lon,
+            place_id: feature.properties.place_id || Math.random().toString(),
+            address_line1: feature.properties.address_line1,
+            address_line2: feature.properties.address_line2,
+            category: feature.properties.category,
           })
         );
 
@@ -614,7 +619,7 @@ export function PropertyInputForm({
       setIsLoadingSuggestions(false);
     }
   };
-
+  
   const handleSuggestionClick = async (suggestion: SearchSuggestion) => {
     form.setValue("address", suggestion.formatted);
     setShowSuggestions(false);

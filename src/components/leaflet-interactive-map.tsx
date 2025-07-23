@@ -160,19 +160,19 @@ export function LeafletInteractiveMap({
     setIsLoadingSuggestions(true);
     try {
       const response = await fetch(
-        `/api/mapbox-search?q=${encodeURIComponent(query)}`
+        `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(query)}&lang=vi&limit=8&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const suggestionsList: SearchSuggestion[] = data.features.map((feature: any) => ({
-          formatted: feature.properties.place_formatted || feature.properties.name || '',
-          lat: feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0,
-          lon: feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0,
-          place_id: feature.properties.mapbox_id || Math.random().toString(),
-          address_line1: feature.properties.name || '',
-          address_line2: feature.properties.place_formatted || '',
-          category: feature.properties.feature_type || 'address',
+          formatted: feature.properties.formatted || feature.properties.address_line1 || '',
+          lat: feature.properties.lat,
+          lon: feature.properties.lon,
+          place_id: feature.properties.place_id || Math.random().toString(),
+          address_line1: feature.properties.address_line1,
+          address_line2: feature.properties.address_line2,
+          category: feature.properties.category,
         }));
         
         setSuggestions(suggestionsList);
@@ -242,14 +242,14 @@ export function LeafletInteractiveMap({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `/api/mapbox-search?q=${encodeURIComponent(searchAddress)}&limit=1`
+        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(searchAddress)}&lang=vi&limit=1&bias=countrycode:vn&apiKey=${getGeoapifyApiKey()}`
       );
       const data = await response.json();
       
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
-        const lat = feature.properties.coordinates?.latitude || feature.geometry.coordinates[1] || 0;
-        const lon = feature.properties.coordinates?.longitude || feature.geometry.coordinates[0] || 0;
+        const lat = feature.properties.lat;
+        const lon = feature.properties.lon;
         handleLocationSelect(lat, lon);
       } else {
         toast({
